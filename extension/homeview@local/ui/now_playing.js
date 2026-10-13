@@ -3,12 +3,13 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 
-import {loadArt} from './art.js';
+import {artPalette, loadArt} from './art.js';
+import {paletteFromHue, toCss} from './palette.js';
 import {drawEq} from './draw.js';
 import {hsl} from '../robot.js';
 import {BentoTile, fmtTime, iconButton, label} from './widgets.js';
 
-const css = c => `rgb(${c.map(v => Math.round(v * 255)).join(',')})`;
+const css = toCss;
 
 export class NowPlaying extends BentoTile {
     constructor(opts) {
@@ -53,7 +54,17 @@ export class NowPlaying extends BentoTile {
         this._fill.set_size(Math.round(this._track.width * frac), this._track.height || 4);
     }
 
+    // The whole tile takes its colours from the cover, with light text on top.
+    _tintTile(pal) {
+        this._pal = pal;
+        this.actor.add_style_class_name('hv-np-colored');
+        this.actor.set_style(`background-gradient-direction: vertical; background-gradient-start: ${css(pal.top)}; background-gradient-end: ${css(pal.bottom)};`);
+    }
+
     build(slot) {
+        this.actor.add_style_class_name('hv-np-colored');
+        if (this._pal)
+            this._tintTile(this._pal);
         this._len = 0;
         this._pos = 0;
         this._artUrl = null;
@@ -155,7 +166,7 @@ export class NowPlaying extends BentoTile {
         if (this._artist && this._artist.text !== artist)
             this._artist.text = artist;
 
-        this._tint = hsl(f.hue, 0.8, this.theme.dark ? 0.72 : 0.42);
+        this._tint = [1, 1, 1];
         if (this._play)
             this._play.child.icon_name = f.playing ? 'media-playback-pause-symbolic' : 'media-playback-start-symbolic';
 
@@ -165,10 +176,16 @@ export class NowPlaying extends BentoTile {
             const radius = `border-radius: ${Math.round(size * 0.2)}px;`;
             const a = hsl(f.hue, 0.6, 0.6), b = hsl(f.hue + 40, 0.6, 0.34);
             this._art.set_style(`${radius} background-gradient-direction: vertical; background-gradient-start: ${css(a)}; background-gradient-end: ${css(b)};`);
+            // Until the real cover is decoded, tint from the track's hue.
+            this._tintTile(paletteFromHue(f.hue));
             const url = f.art_url;
             loadArt(url).then(path => {
-                if (path && url === this._artUrl && this._art)
-                    this._art.set_style(`${radius} background-image: url("file://${path}"); background-size: ${size}px ${size}px;`);
+                if (!path || url !== this._artUrl || !this._art)
+                    return;
+                this._art.set_style(`${radius} background-image: url("file://${path}"); background-size: ${size}px ${size}px;`);
+                const pal = artPalette(path);
+                if (pal)
+                    this._tintTile(pal);
             });
         }
 

@@ -10,7 +10,7 @@ export const SLOT_SIZE = {
     tall: [172, 176],
     square: [172, 84],
     wide: [352, 84],
-    strip: [352, 44],
+    strip: [352, 62],
 };
 
 /**

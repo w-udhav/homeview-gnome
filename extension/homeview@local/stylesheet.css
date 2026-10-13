@@ -33,7 +33,7 @@
 .hv-light .hv-tile { background-color: rgba(255, 255, 255, 0.58); }
 .hv-slot-hero { padding: 14px 16px; }
 .hv-slot-square { padding: 10px 12px; }
-.hv-slot-strip { padding: 0 12px; background-color: transparent !important; }
+.hv-slot-strip { padding: 0; background-color: transparent !important; }
 
 /* --- text ------------------------------------------------------------------ */
 .hv-small, .hv-tile-label, .hv-np-artist, .hv-np-artist-lg, .hv-np-artist-sm, .hv-agent-status, .hv-weather-desc, .hv-times { font-size: 12px; }
@@ -91,13 +91,19 @@
 .hv-slot-square .hv-tile-label { padding-bottom: 0; }
 .hv-weather-desc { font-weight: 600; }
 
-/* toggles */
-.hv-toggle-row { spacing: 12px; }
-.hv-toggle { width: 30px; height: 30px; border-radius: 999px; }
-.hv-toggle-icon { icon-size: 15px; }
-.hv-dark  .hv-toggle { background-color: rgba(255, 255, 255, 0.14); }
-.hv-light .hv-toggle { background-color: rgba(0, 0, 0, 0.08); }
-.hv-toggle:checked { background-color: #a08cf5; color: #ffffff; }
+/* toggle cards: icon over name, four across */
+.hv-gap8 { spacing: 8px; }
+.hv-card-btn { border-radius: 18px; padding: 8px 4px; }
+.hv-dark  .hv-card-btn { background-color: rgba(255, 255, 255, 0.10); }
+.hv-light .hv-card-btn { background-color: rgba(255, 255, 255, 0.58); }
+.hv-dark  .hv-card-btn:hover { background-color: rgba(255, 255, 255, 0.18); }
+.hv-light .hv-card-btn:hover { background-color: rgba(255, 255, 255, 0.80); }
+.hv-card-btn:checked { background-color: rgba(150, 128, 245, 0.82) !important; color: #ffffff; }
+.hv-card-icon { icon-size: 18px; }
+.hv-card-name { font-size: 11px; font-weight: 600; padding-top: 3px; }
+.hv-dark  .hv-card-name { color: rgba(255, 255, 255, 0.75); }
+.hv-light .hv-card-name { color: rgba(0, 0, 0, 0.62); }
+.hv-card-btn:checked .hv-card-name { color: #ffffff; }
 
 /* AI activity */
 .hv-track { height: 6px; border-radius: 3px; margin: 4px 0; }
@@ -116,3 +122,11 @@
 .hv-dark  .hv-chart { background-color: rgba(255, 255, 255, 0.05); }
 .hv-light .hv-chart { background-color: rgba(0, 0, 0, 0.04); }
 .hv-split { border-radius: 3px; margin-top: 2px; }
+
+/* Now Playing takes its colours from the cover: white text on the gradient. */
+.hv-np-colored, .hv-np-colored .hv-np-title, .hv-np-colored .hv-np-title-xl, .hv-np-colored .hv-np-title-sm { color: #ffffff; }
+.hv-np-colored .hv-np-artist, .hv-np-colored .hv-np-artist-lg, .hv-np-colored .hv-np-artist-sm, .hv-np-colored .hv-small, .hv-np-colored .hv-times { color: rgba(255, 255, 255, 0.72); }
+.hv-np-colored .hv-scrub { background-color: rgba(255, 255, 255, 0.28); }
+.hv-np-colored .hv-scrub-fill { background-color: #ffffff; }
+.hv-np-colored .hv-btn { color: #ffffff; }
+.hv-np-colored .hv-btn:hover { background-color: rgba(255, 255, 255, 0.18); }

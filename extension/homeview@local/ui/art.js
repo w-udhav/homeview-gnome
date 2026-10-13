@@ -3,8 +3,11 @@
 // contacts the site the player got the art from (e.g. YouTube's image CDN),
 // nothing else.
 import Gio from 'gi://Gio';
+import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup?version=3.0';
+
+import {paletteFromPixels} from './palette.js';
 
 const cacheDir = GLib.build_filenamev([GLib.get_user_cache_dir(), 'homeview', 'art']);
 const memo = new Map();   // url -> path | null
@@ -65,7 +68,37 @@ export function loadArt(url) {
     return p;
 }
 
+const palettes = new Map();
+
+/** Two background colours from the art file at `path`, or null if it cannot be decoded. */
+export function artPalette(path) {
+    if (palettes.has(path))
+        return palettes.get(path);
+    let result = null;
+    try {
+        const pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 24, 24, false);
+        const data = pb.get_pixels();
+        const ch = pb.get_n_channels(), stride = pb.get_rowstride();
+        const px = [];
+        for (let y = 0; y < pb.get_height(); y++) {
+            for (let x = 0; x < pb.get_width(); x++) {
+                const i = y * stride + x * ch;
+                // Ignore transparent pixels.
+                if (ch === 4 && data[i + 3] < 128)
+                    continue;
+                px.push(data[i], data[i + 1], data[i + 2]);
+            }
+        }
+        result = paletteFromPixels(px);
+    } catch (e) {
+        // Unsupported format (e.g. no WebP loader): callers fall back to the hue tint.
+    }
+    palettes.set(path, result);
+    return result;
+}
+
 export function destroyArt() {
+    palettes.clear();
     session?.abort();
     session = null;
     memo.clear();

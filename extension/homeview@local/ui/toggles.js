@@ -1,4 +1,4 @@
-// The bottom strip: round buttons, lavender when a source is on.
+// The bottom strip: four cards, icon over name. Lavender when a source is on.
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
@@ -21,14 +21,20 @@ export class Toggles extends BentoTile {
     build(_slot) {
         this._btns = new Map();
         this.actor.vertical = false;
-        const row = new St.BoxLayout({x_expand: true, y_expand: true, style_class: 'hv-toggle-row', x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
+        this.actor.add_style_class_name('hv-gap8');
+        this.actor.layout_manager.homogeneous = true; // four equal cards
         for (const it of ITEMS) {
+            const box = new St.BoxLayout({vertical: true, x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
+            box.add_child(new St.Icon({icon_name: it.icon, style_class: 'hv-card-icon', x_align: Clutter.ActorAlign.CENTER}));
+            box.add_child(new St.Label({text: it.name, style_class: 'hv-card-name', x_align: Clutter.ActorAlign.CENTER}));
             const btn = new St.Button({
-                style_class: 'hv-toggle',
+                style_class: 'hv-card-btn',
                 can_focus: true,
                 reactive: true,
+                x_expand: true,
+                y_expand: true,
                 accessible_name: it.name,
-                child: new St.Icon({icon_name: it.icon, style_class: 'hv-toggle-icon'}),
+                child: box,
             });
             btn.connect('clicked', () => {
                 if (it.id === 'hide') {
@@ -40,11 +46,10 @@ export class Toggles extends BentoTile {
                 this._paint(it.id);
                 this.send({t: 'toggle', source: it.id, on: next});
             });
-            row.add_child(btn);
+            this.actor.add_child(btn);
             this._btns.set(it.id, btn);
             this._paint(it.id);
         }
-        this.actor.add_child(row);
     }
 
     _paint(id) {
