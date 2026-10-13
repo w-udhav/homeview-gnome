@@ -70,20 +70,27 @@
 .hv-dark  .hv-btn:hover { background-color: rgba(255, 255, 255, 0.14); }
 .hv-light .hv-btn:hover { background-color: rgba(0, 0, 0, 0.08); }
 
-/* timer */
-.hv-timer-time { font-size: 28px; font-weight: 300; }
-.hv-timer-time-xl { font-size: 46px; font-weight: 300; }
-.hv-timer-time-sm { font-size: 26px; font-weight: 300; }
-.hv-timer-cap { font-size: 10px; font-weight: 700; color: #ff9f0a; }
+/* timer: a dark card in both themes, yellow accent (like the reference) */
+.hv-dark .hv-tile-timer, .hv-light .hv-tile-timer { background-color: rgba(28, 28, 30, 0.96); color: #ffffff; }
+.hv-timer-hero { font-size: 40px; font-weight: 800; }
+.hv-timer-tall { font-size: 30px; font-weight: 800; }
+.hv-timer-wide { font-size: 28px; font-weight: 800; }
+.hv-timer-square { font-size: 26px; font-weight: 800; }
+.hv-timer-cap { font-size: 10px; font-weight: 700; color: #ffc21a; }
+.hv-timer-label { font-size: 11px; font-weight: 600; color: rgba(255, 255, 255, 0.6); }
+.hv-timer-bubble { background-color: #ffc21a; color: #111111; border-radius: 11px; padding: 2px 10px; font-size: 12px; font-weight: 700; }
+.hv-tbtn-row { padding-top: 6px; }
+.hv-tbtn-primary { background-color: #ffc21a; color: #111111; border-radius: 15px; padding: 7px 0; }
+.hv-tbtn-primary:hover { background-color: #ffd04d; }
+.hv-tbtn-secondary { background-color: rgba(255, 255, 255, 0.14); color: #ffffff; border-radius: 15px; padding: 7px 0; font-size: 14px; font-weight: 700; text-align: center; }
+.hv-tbtn-secondary:hover { background-color: rgba(255, 255, 255, 0.24); }
+.hv-tbtn-compact { padding: 7px 12px; min-width: 18px; }
+.hv-tbtn-icon { icon-size: 16px; color: #111111; }
 .hv-chips { spacing: 5px; padding-top: 2px; }
-.hv-chips-gap { padding-top: 6px; }
-.hv-chips-gap { padding-top: 6px; }
-.hv-chip { border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 600; }
+.hv-chip { border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
 .hv-dark  .hv-chip { background-color: rgba(255, 255, 255, 0.14); }
 .hv-light .hv-chip { background-color: rgba(0, 0, 0, 0.08); }
-.hv-dark  .hv-chip:hover { background-color: rgba(255, 255, 255, 0.24); }
-.hv-light .hv-chip:hover { background-color: rgba(0, 0, 0, 0.15); }
-.hv-chip-accent { background-color: #ff9f0a !important; color: #ffffff; }
+.hv-chip-accent { background-color: #ffc21a !important; color: #111111 !important; }
 
 /* weather */
 .hv-weather-icon { icon-size: 24px; }
@@ -109,7 +116,7 @@
 .hv-track { height: 6px; border-radius: 3px; margin: 4px 0; }
 .hv-dark  .hv-track { background-color: rgba(255, 255, 255, 0.16); }
 .hv-light .hv-track { background-color: rgba(0, 0, 0, 0.10); }
-.hv-track-fill { height: 6px; border-radius: 3px; background-color: #ff9f0a; }
+.hv-track-fill { height: 6px; border-radius: 3px; background-color: #ffc21a; }
 .hv-agent-rows { spacing: 3px; }
 .hv-agent-row { spacing: 8px; }
 .hv-agent-dot { width: 8px; height: 8px; border-radius: 4px; background-color: rgba(128, 128, 128, 0.45); }

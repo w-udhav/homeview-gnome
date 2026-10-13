@@ -1,13 +1,14 @@
-// Timer in every slot. The hero is the Apple Timer face: the tick ring runs
-// around the whole tile.
+// Timer: a dark card with a big bold time, a segmented progress track with a
+// marker and a "N min left" bubble, a primary stop/start button and a +1:00
+// button. Works in every bento slot.
 import Clutter from 'gi://Clutter';
-import GLib from 'gi://GLib';
 import St from 'gi://St';
 
-import {drawTickRing} from './draw.js';
-import {BentoTile, SLOT_SIZE, fmtTime, label, textButton} from './widgets.js';
+import {ACCENT, drawSegments} from './draw.js';
+import {BentoTile, fmtTime, label} from './widgets.js';
 
-const PRESETS = [[5, '5m'], [15, '15m'], [25, '25m']];
+const PRESETS = [5, 15, 25, 45]; // minutes, cycled by the secondary button when idle
+const SEGMENTS = 10;
 
 export class TimerTile extends BentoTile {
     constructor(opts) {
@@ -15,122 +16,176 @@ export class TimerTile extends BentoTile {
         this.theme = opts.theme;
         this._t = {total: 0, left: 0, running: false};
         this._done = false;
+        this._preset = 1;
     }
 
-    _chips(mode) {
-        const row = new St.BoxLayout({style_class: 'hv-chips', x_align: Clutter.ActorAlign.CENTER});
-        if (mode === 'idle') {
-            for (const [m, text] of PRESETS)
-                row.add_child(textButton(text, '', () => this.send({t: 'timer', action: 'start', secs: m * 60})));
+    _active() {
+        return this._t.total > 0;
+    }
+
+    _primaryClicked() {
+        if (this._active())
+            this.send({t: 'timer', action: 'cancel'});
+        else
+            this.send({t: 'timer', action: 'start', secs: PRESETS[this._preset] * 60});
+    }
+
+    _secondaryClicked() {
+        if (this._active()) {
+            this.send({t: 'timer', action: 'add', secs: 60});
         } else {
-            row.add_child(textButton(mode === 'running' ? 'Pause' : 'Resume', 'hv-chip-accent', () => this.send({t: 'timer', action: 'toggle'})));
-            row.add_child(textButton('+1m', '', () => this.send({t: 'timer', action: 'add', secs: 60})));
-            row.add_child(textButton('✕', '', () => this.send({t: 'timer', action: 'cancel'})));
+            this._preset = (this._preset + 1) % PRESETS.length;
+            this._last = null;
+            if (this.f)
+                this.update(this.f);
         }
+    }
+
+    _primary(compact) {
+        const b = new St.Button({
+            style_class: `hv-tbtn-primary ${compact ? 'hv-tbtn-compact' : ''}`,
+            can_focus: true,
+            reactive: true,
+            x_expand: !compact,
+            child: new St.Icon({icon_name: 'media-playback-start-symbolic', style_class: 'hv-tbtn-icon'}),
+        });
+        b.connect('clicked', () => this._primaryClicked());
+        this._pbtn = b;
+        return b;
+    }
+
+    _secondary(compact) {
+        const b = new St.Button({
+            style_class: `hv-tbtn-secondary ${compact ? 'hv-tbtn-compact' : ''}`,
+            can_focus: true,
+            reactive: true,
+            x_expand: !compact,
+            label: '+1:00',
+        });
+        b.connect('clicked', () => this._secondaryClicked());
+        this._sbtn = b;
+        return b;
+    }
+
+    _bar(height) {
+        const bar = new St.DrawingArea({x_expand: true, reactive: false});
+        bar.set_height(height);
+        bar.connect('repaint', a => {
+            const [w, h] = a.get_surface_size();
+            const cr = a.get_context();
+            const t = this._t;
+            const progress = t.total > 0 ? t.left / t.total : 0;
+            drawSegments(cr, w, h, {segments: SEGMENTS, progress, active: t.total > 0, paused: !t.running && t.total > 0});
+            cr.$dispose();
+        });
+        this._barArea = bar;
+        return bar;
+    }
+
+    /** The "N min left" bubble rides above the bar's marker. */
+    _bubbleRow() {
+        const row = new St.Widget({layout_manager: new Clutter.FixedLayout(), x_expand: true, height: 24});
+        this._bubble = new St.Label({style_class: 'hv-timer-bubble', text: ''});
+        row.add_child(this._bubble);
+        this._bubbleRow_ = row;
+        row.connect('notify::width', () => this._placeBubble());
         return row;
     }
 
-    _ringArea(w, h, radius) {
-        const ring = new St.DrawingArea({x_expand: true, y_expand: true, reactive: true});
-        ring.set_size(w, h);
-        ring.connect('repaint', a => {
-            const [aw, ah] = a.get_surface_size();
-            const cr = a.get_context();
-            const t = this._t;
-            const lit = t.total > 0 ? Math.ceil(60 * (t.left / t.total)) : 0;
-            drawTickRing(cr, aw, ah, {lit, pal: this.theme.palette, radius});
-            cr.$dispose();
-        });
-        ring.connect('button-press-event', () => {
-            if (this._t.total > 0)
-                this.send({t: 'timer', action: 'toggle'});
-            return Clutter.EVENT_STOP;
-        });
-        return ring;
+    _placeBubble() {
+        if (!this._bubble || !this._bubbleRow_?.get_stage())
+            return;
+        const rowW = this._bubbleRow_.width;
+        const progress = this._t.total > 0 ? this._t.left / this._t.total : 0;
+        const [bw] = this._bubble.get_size();
+        const x = Math.min(Math.max(progress * rowW - bw / 2, 0), Math.max(0, rowW - bw));
+        this._bubble.set_position(Math.round(x), 0);
+        this._bubble.visible = this._active() || this._done;
     }
 
     build(slot) {
-        this._mode = '';
-        this._chipsBox = null;
-        this._ring = null;
-        this._time = new St.Label({style_class: slot === 'hero' ? 'hv-timer-time-xl' : slot === 'square' ? 'hv-timer-time-sm' : 'hv-timer-time', text: '', x_align: Clutter.ActorAlign.CENTER});
-        this._cap = new St.Label({style_class: 'hv-timer-cap', text: '', x_align: Clutter.ActorAlign.CENTER});
+        this._pbtn = this._sbtn = this._barArea = this._bubble = this._bubbleRow_ = this._cap = null;
+        this._time = new St.Label({style_class: `hv-timer-${slot}`, text: '', x_align: Clutter.ActorAlign.START, y_align: Clutter.ActorAlign.CENTER, reactive: true});
+        this._time.connect('button-press-event', () => {
+            if (this._active())
+                this.send({t: 'timer', action: 'toggle'});
+            return Clutter.EVENT_STOP;
+        });
+        this._cap = label('', 'hv-timer-cap', {x_align: Clutter.ActorAlign.END, y_align: Clutter.ActorAlign.CENTER, x_expand: true});
 
-        if (slot === 'hero' || slot === 'tall') {
-            const [w, h] = SLOT_SIZE[slot];
-            // The ring hugs the tile edge; inside it, time, caption and (hero)
-            // the chips. On the narrow tall tile the chips sit under the ring.
-            const stack = new St.Widget({layout_manager: new Clutter.BinLayout(), x_expand: true, y_expand: true});
-            this._ring = this._ringArea(w - 28, slot === 'hero' ? h - 28 : h - 64, 26);
-            const center = new St.BoxLayout({vertical: true, x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
-            center.add_child(this._time);
-            center.add_child(this._cap);
-            this._chipsBox = new St.BoxLayout({x_align: Clutter.ActorAlign.CENTER, style_class: 'hv-chips-gap'});
-            if (slot === 'hero')
-                center.add_child(this._chipsBox);
-            stack.add_child(this._ring);
-            stack.add_child(center);
-            this.actor.add_child(stack);
-            if (slot === 'tall')
-                this.actor.add_child(this._chipsBox);
+        if (slot === 'hero') {
+            const top = new St.BoxLayout();
+            top.add_child(this._time);
+            top.add_child(this._cap);
+            this.actor.add_child(top);
+            this.actor.add_child(this._bubbleRow());
+            this.actor.add_child(this._bar(24));
+            const btns = new St.BoxLayout({style_class: 'hv-gap8 hv-tbtn-row'});
+            btns.add_child(this._primary(false));
+            btns.add_child(this._secondary(false));
+            this.actor.add_child(btns);
+        } else if (slot === 'tall') {
+            this.actor.add_child(label('Timer', 'hv-timer-label'));
+            this.actor.add_child(this._time);
+            this.actor.add_child(this._cap);
+            this.actor.add_child(this._bar(18));
+            const btns = new St.BoxLayout({style_class: 'hv-gap8 hv-tbtn-row'});
+            btns.add_child(this._primary(false));
+            btns.add_child(this._secondary(false));
+            this.actor.add_child(btns);
         } else if (slot === 'wide') {
             this.actor.vertical = false;
             this.actor.add_style_class_name('hv-gap12');
-            const left = new St.BoxLayout({vertical: true, y_align: Clutter.ActorAlign.CENTER});
-            left.add_child(label('Timer', 'hv-tile-label'));
+            const left = new St.BoxLayout({vertical: true, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
             left.add_child(this._time);
-            left.add_child(this._cap);
+            left.add_child(this._bar(12));
             this.actor.add_child(left);
-            this._chipsBox = new St.BoxLayout({x_expand: true, x_align: Clutter.ActorAlign.END, y_align: Clutter.ActorAlign.CENTER});
-            this.actor.add_child(this._chipsBox);
-        } else { // square: tap to start 15m / pause / resume
+            const btns = new St.BoxLayout({style_class: 'hv-gap8', y_align: Clutter.ActorAlign.CENTER});
+            btns.add_child(this._primary(true));
+            btns.add_child(this._secondary(true));
+            this.actor.add_child(btns);
+        } else { // square: tap to start / pause
             this.actor.reactive = true;
             this.actor.connect('button-press-event', () => {
-                this.send(this._t.total > 0 ? {t: 'timer', action: 'toggle'} : {t: 'timer', action: 'start', secs: 900});
+                this.send(this._active() ? {t: 'timer', action: 'toggle'} : {t: 'timer', action: 'start', secs: PRESETS[this._preset] * 60});
                 return Clutter.EVENT_STOP;
             });
-            this.actor.add_child(label('Timer', 'hv-tile-label'));
-            this.actor.add_child(this._time);
             this.actor.add_child(this._cap);
+            this.actor.add_child(this._time);
+            this.actor.add_child(this._bar(8));
         }
         this._last = null;
     }
 
-    _setChips(mode) {
-        if (!this._chipsBox || mode === this._mode)
-            return;
-        this._mode = mode;
-        this._chipsBox.destroy_all_children();
-        this._chipsBox.add_child(this._chips(mode));
-    }
-
     update(f) {
         const t = f.timer || {total: 0, left: 0, running: false};
-        const key = `${Math.ceil(t.left)}|${t.total}|${t.running}|${f.timer_done}`;
+        const done = !!f.timer_done;
+        const key = `${Math.ceil(t.left)}|${t.total}|${t.running}|${done}|${this._preset}`;
         this._t = t;
-        this._done = !!f.timer_done;
-        const idle = t.total === 0;
-        if (key === this._last && !(idle && !this._done && (this._n = (this._n ?? 0) + 1) % 30 === 0))
+        this._done = done;
+        if (key === this._last)
             return;
         this._last = key;
 
-        if (t.total > 0) {
+        const idle = t.total === 0;
+        const mins = Math.max(1, Math.ceil(t.left / 60));
+        if (!idle) {
             this._time.text = fmtTime(t.left);
             this._cap.text = t.running ? `${Math.round(t.total / 60)} MIN` : 'PAUSED';
-            this._setChips(t.running ? 'running' : 'paused');
-        } else if (this._done) {
+        } else if (done) {
             this._time.text = 'Done';
-            this._cap.text = 'TIMER';
-            this._setChips('idle');
-        } else if (this.slot === 'square') {
-            this._time.text = '15:00';
-            this._cap.text = 'TAP TO START';
-            this._setChips('idle');
+            this._cap.text = 'TIME’S UP';
         } else {
-            this._time.text = GLib.DateTime.new_now_local().format('%H:%M');
-            this._cap.text = 'SET A TIMER';
-            this._setChips('idle');
+            this._time.text = fmtTime(PRESETS[this._preset] * 60);
+            this._cap.text = this.slot === 'square' ? 'TAP TO START' : 'TIMER';
         }
-        this._ring?.queue_repaint();
+        if (this._bubble)
+            this._bubble.text = idle ? (done ? 'Time’s up' : '') : t.running ? `${mins} min left` : 'Paused';
+        if (this._pbtn)
+            this._pbtn.child.icon_name = idle ? 'media-playback-start-symbolic' : 'media-playback-stop-symbolic';
+        if (this._sbtn)
+            this._sbtn.label = idle ? `${PRESETS[this._preset]} min` : '+1:00';
+        this._placeBubble();
+        this._barArea?.queue_repaint();
     }
 }

@@ -147,3 +147,63 @@ export function drawDayChart(cr, w, h, arc, pal, nowHour) {
         cr.stroke();
     }
 }
+
+// --- segmented timer track -------------------------------------------------------
+
+export const ACCENT = [1.0, 0.76, 0.1];
+
+/**
+ * A row of rounded segments. `progress` (0-1) is the time remaining: segments
+ * fill left to right with the accent colour, the last lit one partially, and a
+ * thin marker sits at the boundary. Elapsed segments stay dim.
+ */
+export function drawSegments(cr, w, h, {segments = 10, progress = 0, active = false, paused = false}) {
+    const gap = 4;
+    const sw = (w - gap * (segments - 1)) / segments;
+    const r = Math.min(7, h / 2);
+    const rr = (x, y, ww, hh, rad) => {
+        rad = Math.min(rad, ww / 2, hh / 2);
+        cr.newPath();
+        cr.moveTo(x + rad, y);
+        cr.lineTo(x + ww - rad, y);
+        cr.arc(x + ww - rad, y + rad, rad, -Math.PI / 2, 0);
+        cr.lineTo(x + ww, y + hh - rad);
+        cr.arc(x + ww - rad, y + hh - rad, rad, 0, Math.PI / 2);
+        cr.lineTo(x + rad, y + hh);
+        cr.arc(x + rad, y + hh - rad, rad, Math.PI / 2, Math.PI);
+        cr.lineTo(x, y + rad);
+        cr.arc(x + rad, y + rad, rad, Math.PI, 1.5 * Math.PI);
+        cr.closePath();
+    };
+    const lit = active ? progress * segments : 0;
+    for (let i = 0; i < segments; i++) {
+        const x = i * (sw + gap);
+        // dim base
+        cr.setSourceRGBA(1, 1, 1, active ? 0.14 : 0.10);
+        rr(x, 0, sw, h, r);
+        cr.fill();
+        const f = Math.max(0, Math.min(1, lit - i));
+        if (f > 0) {
+            cr.save();
+            cr.rectangle(x, 0, sw * f, h);
+            cr.clip();
+            cr.setSourceRGBA(ACCENT[0], ACCENT[1], ACCENT[2], paused ? 0.55 : 1);
+            rr(x, 0, sw, h, r);
+            cr.fill();
+            cr.restore();
+        }
+    }
+    if (active) {
+        // Marker: where the lit part ends, accounting for the gaps.
+        const idx = Math.min(segments - 1, Math.floor(lit));
+        const frac = lit >= segments ? 1 : lit - idx;
+        const x = idx * (sw + gap) + sw * frac;
+        cr.setSourceRGBA(1, 1, 1, 0.95);
+        cr.setLineWidth(2);
+        cr.setLineCap(1);
+        cr.newPath();
+        cr.moveTo(Math.min(w - 1, Math.max(1, x)), -2);
+        cr.lineTo(Math.min(w - 1, Math.max(1, x)), h + 2);
+        cr.stroke();
+    }
+}
