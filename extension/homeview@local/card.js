@@ -1,7 +1,8 @@
 // The hover "today" card.
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
-import {drawArc} from './face.js';
+import {drawArc, drawCreature, OFFLINE_FRAME} from './face.js';
+import {POSE_LABEL} from './sprite.js';
 
 const fmt = m => (m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`);
 
@@ -9,6 +10,15 @@ export class Card {
     constructor() {
         this.actor = new St.BoxLayout({vertical: true, style_class: 'hv-card'});
 
+        this._frame = OFFLINE_FRAME;
+        this._scene = new St.DrawingArea({style_class: 'hv-scene', height: 112, x_expand: true});
+        this._scene.connect('repaint', a => {
+            const [w, h] = a.get_surface_size();
+            const cr = a.get_context();
+            drawCreature(cr, w, h, this._frame, {scene: true});
+            cr.$dispose();
+        });
+        this._pose = new St.Label({style_class: 'hv-pose', text: ''});
         this._now = new St.Label({style_class: 'hv-now', text: ''});
         this._story = new St.Label({style_class: 'hv-story', text: 'Loading today…'});
         this._story.clutter_text.line_wrap = true;
@@ -32,7 +42,7 @@ export class Card {
         });
         this._arcLabel = new St.Label({style_class: 'hv-small', text: 'focus · energy · joy through the day'});
 
-        for (const a of [this._now, this._story, this._cats, this._misc, this._foodLabel,
+        for (const a of [this._scene, this._pose, this._now, this._story, this._cats, this._misc, this._foodLabel,
             this._foodTrack, this._arc, this._arcLabel])
             this.actor.add_child(a);
 
@@ -42,6 +52,12 @@ export class Card {
     _layoutFood() {
         const w = this._foodTrack.width;
         this._foodFill.set_size(Math.round(w * this._food), this._foodTrack.height || 6);
+    }
+
+    setFrame(f) {
+        this._frame = f;
+        this._pose.text = f.offline ? '' : (POSE_LABEL[f.pose] || '');
+        this._scene.queue_repaint();
     }
 
     setNow(text) {

@@ -16,7 +16,8 @@ UNIT="$HOME/.config/systemd/user/homeviewd.service"
 mkdir -p "$(dirname "$UNIT")"
 sed "s|@BINDIR@|$HOME/.cargo/bin|" packaging/homeviewd.service.in > "$UNIT"
 systemctl --user daemon-reload
-systemctl --user enable --now homeviewd.service
+systemctl --user enable homeviewd.service
+systemctl --user restart homeviewd.service
 
 cat <<'EOF'
 

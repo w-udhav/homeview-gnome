@@ -1,9 +1,9 @@
 # Homeview
 
-A small companion in your GNOME panel. Its face reacts to what you are actually doing: the song playing, the app and site in focus, Claude Code / Codex / Ollama activity, and whether you have gone idle. Hover for a "today" card. Everything stays on your machine.
+A small pixel-art creature in your GNOME panel. It acts out what you are actually doing: the song playing, the app and site in focus, Claude Code / Codex / Ollama activity, and whether you have gone idle. Hover for a "today" card. Everything stays on your machine.
 
 ```
- GNOME Shell extension (draws face, reports focus/idle/pointer)
+ GNOME Shell extension (draws the creature, reports focus/idle/pointer)
         │  JSON lines over $XDG_RUNTIME_DIR/homeview.sock
  homeviewd (mood engine, springs, day log)   ◄── hv emit … (hooks, scripts)
         ▲                                    ◄── browser extension → hv native-host
@@ -55,7 +55,7 @@ Load `browser/extension` (unpacked in Chromium-family, temporary add-on in Firef
 
 ## Config
 
-`~/.config/homeview/config.toml`, see `config.example.toml`. Toggle any source, set categories, face style (`classic` / `round` / `minimal`), and optional Ollama one-liners. Reloads live.
+`~/.config/homeview/config.toml`, see `config.example.toml`. Toggle any source, set categories, and optional Ollama one-liners. Reloads live.
 
 ## Privacy
 

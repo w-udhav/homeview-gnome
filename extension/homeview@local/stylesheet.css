@@ -42,3 +42,13 @@
 .hv-arc {
   border-radius: 6px;
 }
+
+.hv-scene {
+  border-radius: 8px;
+}
+
+.hv-pose {
+  font-size: 0.85em;
+  opacity: 0.7;
+  text-align: center;
+}

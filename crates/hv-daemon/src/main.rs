@@ -109,7 +109,7 @@ impl Brain {
             rem -= d;
         }
         if frames.receiver_count() > 0 {
-            let f = self.face.frame(&self.eng, self.cfg.llm.daily_token_goal, &self.cfg.face_style);
+            let f = self.face.frame(&self.eng, self.cfg.llm.daily_token_goal, now);
             if let Ok(s) = serde_json::to_string(&f) {
                 let _ = frames.send(Arc::new(s));
             }

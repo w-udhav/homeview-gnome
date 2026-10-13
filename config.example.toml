@@ -1,9 +1,6 @@
 # Copy to ~/.config/homeview/config.toml. The daemon reloads it automatically
 # (or run `hv reload`). Every key is optional.
 
-# "classic" | "round" | "minimal"
-face_style = "classic"
-
 # Turn any signal off. Events from a disabled source are ignored.
 [sources]
 mpris = true     # YouTube Music etc. via MPRIS

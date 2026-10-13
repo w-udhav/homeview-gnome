@@ -13,11 +13,11 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import {Client} from './client.js';
 import {Card} from './card.js';
-import {drawFace, OFFLINE_FRAME} from './face.js';
+import {drawCreature, OFFLINE_FRAME} from './face.js';
 
 const IDLE_MS = 90 * 1000;
-const FACE_W = 56;
-const FACE_H = 24;
+const FACE_W = 48;
+const FACE_H = 28;
 
 const Indicator = GObject.registerClass(
 class HomeviewIndicator extends PanelMenu.Button {
@@ -30,7 +30,7 @@ class HomeviewIndicator extends PanelMenu.Button {
         this._area.connect('repaint', a => {
             const [w, h] = a.get_surface_size();
             const cr = a.get_context();
-            drawFace(cr, w, h, this._frame);
+            drawCreature(cr, w, h, this._frame);
             cr.$dispose();
         });
         this.add_child(this._area);
@@ -101,6 +101,8 @@ class HomeviewIndicator extends PanelMenu.Button {
             return;
         this._frame = f;
         this.visible = !f.hidden;
+        if (this.menu.isOpen)
+            this._card.setFrame(f);
         this._card.setNow([f.status, f.speech ? `“${f.speech}”` : ''].filter(Boolean).join('\n'));
         this._area.queue_repaint();
     }
@@ -110,6 +112,7 @@ class HomeviewIndicator extends PanelMenu.Button {
             return;
         this._frame = OFFLINE_FRAME;
         this.visible = true;
+        this._card.setFrame(OFFLINE_FRAME);
         this._card.setNow('homeviewd is not running');
         this._area.queue_repaint();
     }

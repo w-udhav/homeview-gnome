@@ -1,4 +1,4 @@
-use crate::mood::{Engine, Mood};
+use crate::mood::{Category, Engine, Mood};
 use serde::Serialize;
 
 /// Critically-ish damped spring, semi-implicit Euler.
@@ -55,7 +55,7 @@ pub struct Frame {
     pub status: String,
     pub speech: Option<String>,
     pub food: f32,
-    pub style: String,
+    pub pose: &'static str,
     pub mood: Mood,
 }
 
@@ -75,6 +75,29 @@ pub struct Face {
     next_blink: f64,
     blink_until: f64,
     breathe: f32,
+}
+
+/// What the creature is doing. Music is a separate overlay (`playing`).
+pub fn pose(eng: &Engine, now: f64) -> &'static str {
+    if now < eng.cheer_until {
+        "cheer"
+    } else if now < eng.wave_until {
+        "wave"
+    } else if now < eng.sideeye_until {
+        "sideeye"
+    } else if eng.ctx.idle || eng.mood.sleepiness > 0.8 {
+        "sleep"
+    } else if eng.llm_busy() {
+        "think"
+    } else {
+        match eng.ctx.category() {
+            Category::Work => "work",
+            Category::Watch => "watch",
+            Category::Read => "read",
+            Category::Social => "social",
+            Category::Other => "idle",
+        }
+    }
 }
 
 fn hash_hue(s: &str) -> f32 {
@@ -186,7 +209,7 @@ impl Face {
         self.breathe = ((now * std::f64::consts::TAU / 4.0).sin() as f32) * 0.5 + 0.5;
     }
 
-    pub fn frame(&self, eng: &Engine, goal: u64, style: &str) -> Frame {
+    pub fn frame(&self, eng: &Engine, goal: u64, now: f64) -> Frame {
         let status = match (&eng.ctx.track, eng.ctx.playing) {
             (Some((t, a)), true) if !a.is_empty() => format!("♪ {t} — {a}"),
             (Some((t, _)), true) => format!("♪ {t}"),
@@ -212,7 +235,7 @@ impl Face {
             status,
             speech: eng.ctx.speech.as_ref().map(|(s, _)| s.clone()),
             food: if goal == 0 { 0.0 } else { (eng.ctx.tokens_today as f32 / goal as f32).min(1.0) },
-            style: style.to_string(),
+            pose: pose(eng, now),
             mood: eng.mood,
         }
     }
@@ -276,7 +299,27 @@ mod tests {
     fn frame_serializes() {
         let eng = Engine::new(Classifier::new(Categories::default()));
         let f = Face::new(1);
-        let s = serde_json::to_string(&f.frame(&eng, 1000, "classic")).unwrap();
+        let s = serde_json::to_string(&f.frame(&eng, 1000, 0.0)).unwrap();
         assert!(s.starts_with(r#"{"t":"frame""#));
+    }
+
+    fn eng() -> Engine {
+        Engine::new(Classifier::new(Categories::default()))
+    }
+
+    #[test]
+    fn poses_follow_context() {
+        use crate::event::{Event, LlmState};
+        let mut e = eng();
+        assert_eq!(pose(&e, 0.0), "idle");
+        e.apply(&Event::Focus { app: "kitty".into(), title: String::new() }, 1.0);
+        assert_eq!(pose(&e, 2.0), "work");
+        e.apply(&Event::Llm { agent: "claude".into(), state: LlmState::Started }, 3.0);
+        assert_eq!(pose(&e, 4.0), "think");
+        e.apply(&Event::Llm { agent: "claude".into(), state: LlmState::Finished }, 60.0);
+        assert_eq!(pose(&e, 61.0), "cheer");
+        assert_eq!(pose(&e, 70.0), "work");
+        e.apply(&Event::Idle { idle: true }, 80.0);
+        assert_eq!(pose(&e, 81.0), "sleep");
     }
 }

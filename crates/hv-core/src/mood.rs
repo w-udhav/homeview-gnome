@@ -116,6 +116,7 @@ pub struct Engine {
     pub glance_until: f64,
     pub sideeye_until: f64,
     pub wave_until: f64,
+    pub cheer_until: f64,
     pub bounce: bool,
 }
 
@@ -133,6 +134,7 @@ impl Engine {
             glance_until: 0.0,
             sideeye_until: 0.0,
             wave_until: 0.0,
+            cheer_until: 0.0,
             bounce: false,
         }
     }
@@ -221,8 +223,10 @@ impl Engine {
                         if now - since >= 30.0 {
                             self.mood.joy += 0.6;
                             self.bounce = true;
+                            self.cheer_until = now + 3.0;
                         } else {
                             self.mood.joy += 0.2;
+                            self.cheer_until = now + 1.0;
                         }
                     }
                 }
@@ -321,6 +325,7 @@ mod tests {
         e.apply(&Event::Llm { agent: "claude".into(), state: LlmState::Finished }, 60.0);
         assert!(e.mood.joy >= 0.8);
         assert!(e.bounce);
+        assert!(e.cheer_until > 60.0);
     }
 
     #[test]

@@ -85,8 +85,6 @@ pub struct Config {
     pub categories: Categories,
     pub llm: Llm,
     pub ollama: Ollama,
-    /// "classic" | "round" | "minimal"
-    pub face_style: String,
 }
 
 impl Default for Config {
@@ -96,7 +94,6 @@ impl Default for Config {
             categories: Categories::default(),
             llm: Llm::default(),
             ollama: Ollama::default(),
-            face_style: "classic".into(),
         }
     }
 }
@@ -151,13 +148,11 @@ mod tests {
     fn empty_is_default() {
         let c = Config::parse("").unwrap();
         assert!(c.sources.mpris);
-        assert_eq!(c.face_style, "classic");
     }
 
     #[test]
     fn partial_override() {
-        let c = Config::parse("face_style = \"round\"\n[sources]\nbrowser = false\n").unwrap();
-        assert_eq!(c.face_style, "round");
+        let c = Config::parse("[sources]\nbrowser = false\n").unwrap();
         assert!(!c.sources.browser);
         assert!(c.sources.focus);
     }
