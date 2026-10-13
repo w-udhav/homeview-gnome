@@ -1,6 +1,7 @@
 pub mod config;
 pub mod event;
 pub mod face;
+pub mod layout;
 pub mod mood;
 pub mod timer;
 pub mod weather;

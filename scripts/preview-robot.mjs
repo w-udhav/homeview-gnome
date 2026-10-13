@@ -2,7 +2,7 @@
 //   node scripts/preview-robot.mjs out.svg
 // A tiny recorder stands in for the cairo context GNOME Shell provides.
 import {writeFileSync} from 'node:fs';
-import {drawEyes, POSE_LABEL} from '../extension/homeview@local/robot.js';
+import {drawFaceScreen, POSE_LABEL} from '../extension/homeview@local/robot.js';
 
 class SvgCtx {
     constructor() { this.out = []; this.rgba = [0, 0, 0, 1]; this.lw = 1; this.d = ''; this.cap = 'butt'; this.tx = 0; this.ty = 0; this.stack = []; }
@@ -35,13 +35,13 @@ const variants = [
 ];
 
 let svg = '';
-// Panel-sized eyes (48x28) shown at 4x on the dark top-bar colour.
+// Panel-sized face (48x28) shown at 4x on the top-bar colour.
 const COLS = 5, CW = 230, CH = 150, Z = 4;
 variants.forEach((v, i) => {
     const x = (i % COLS) * CW + 12, y = Math.floor(i / COLS) * CH + 12;
-    svg += `<rect x="${x}" y="${y}" width="${48 * Z}" height="${28 * Z}" rx="10" fill="#0b0b0d"/>`;
+    svg += `<rect x="${x}" y="${y}" width="${48 * Z}" height="${28 * Z}" rx="10" fill="#000"/>`;
     const ctx = new SvgCtx();
-    drawEyes(ctx, 48, 28, v.f, v.t);
+    drawFaceScreen(ctx, 48, 28, v.f, v.t);
     svg += `<g transform="translate(${x} ${y}) scale(${Z})">${ctx.out.join('')}</g>`;
     svg += `<text x="${x}" y="${y + 28 * Z + 16}" fill="#333" font-family="sans-serif" font-size="13">${v.label}</text>`;
 });

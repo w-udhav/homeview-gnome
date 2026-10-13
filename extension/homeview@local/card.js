@@ -1,25 +1,42 @@
-// The hover popup: a glass card of tiles. Composition only; each tile lives
-// in ui/. Light or dark follows the system setting.
+// The hover popup: a bento grid of glass tiles. The daemon ranks which tiles
+// matter right now and which slot each takes; this file only arranges them.
+//
+// This module is also the "UI bundle": extension.js imports everything it
+// draws from here, so `hv reload-ui` can load a fresh copy of the whole UI.
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 
-import {OFFLINE_FRAME} from './face.js';
+import {drawFace, OFFLINE_FRAME} from './face.js';
 import {AgentsTile} from './ui/agents.js';
 import {DayTile} from './ui/day.js';
+import {FocusTile} from './ui/focus.js';
 import {NowPlaying} from './ui/now_playing.js';
 import {TimerTile} from './ui/timer.js';
 import {Toggles} from './ui/toggles.js';
 import {WeatherTile} from './ui/weather.js';
-import {label} from './ui/widgets.js';
+import {GAP, label} from './ui/widgets.js';
+
+export {drawFace, OFFLINE_FRAME};
+export {createGlass} from './ui/glass.js';
+export {Theme} from './ui/theme.js';
+export {destroyArt} from './ui/art.js';
+
+// Used when the daemon has not sent a layout yet.
+const DEFAULT_LAYOUT = [
+    {id: 'day', slot: 'hero'},
+    {id: 'timer', slot: 'tall'},
+    {id: 'ai', slot: 'square'},
+    {id: 'focus', slot: 'square'},
+    {id: 'toggles', slot: 'strip'},
+];
 
 export class Card {
     constructor({send, theme, onHide}) {
         this._theme = theme;
-        this._send = send;
         this._frame = OFFLINE_FRAME;
+        this._layoutKey = '';
 
-        // Outer: the glass surface. Inner: scrolls only if the screen is short.
         this.actor = new St.BoxLayout({vertical: true, style_class: `hv-card ${theme.cssClass}`});
         this._scroll = new St.ScrollView({
             style_class: 'hv-scroll',
@@ -30,63 +47,101 @@ export class Card {
             y_expand: true,
         });
         this.actor.add_child(this._scroll);
-        const body = new St.BoxLayout({vertical: true, style_class: 'hv-body'});
-        this._scroll.set_child(body);
+        this._body = new St.BoxLayout({vertical: true, style_class: 'hv-body'});
+        this._scroll.set_child(this._body);
 
-        // header
-        const header = new St.BoxLayout({style_class: 'hv-header'});
-        const titles = new St.BoxLayout({vertical: true, x_expand: true});
-        this._title = label('', 'hv-title');
-        this._date = label('', 'hv-date');
-        titles.add_child(this._title);
-        titles.add_child(this._date);
-        header.add_child(titles);
-        this._offline = label('Daemon offline', 'hv-offline', {x_align: Clutter.ActorAlign.END});
+        this._offline = label('Daemon offline', 'hv-offline');
         this._offline.hide();
-        header.add_child(this._offline);
-        body.add_child(header);
 
-        this.now = new NowPlaying({send, theme});
-        this.timer = new TimerTile({send, theme});
-        this.weather = new WeatherTile();
-        this.toggles = new Toggles({send, onHide});
-        this.agents = new AgentsTile();
-        this.day = new DayTile({theme});
-
-        body.add_child(this.now.actor);
-
-        const row = new St.BoxLayout({style_class: 'hv-row', x_expand: true});
-        row.add_child(this.timer.actor);
-        const right = new St.BoxLayout({vertical: true, style_class: 'hv-col', x_expand: true});
-        right.add_child(this.weather.actor);
-        right.add_child(this.toggles.actor);
-        row.add_child(right);
-        body.add_child(row);
-
-        body.add_child(this.agents.actor);
-        body.add_child(this.day.actor);
+        const opts = {send, theme, onHide};
+        this.tiles = {
+            now_playing: new NowPlaying(opts),
+            timer: new TimerTile(opts),
+            ai: new AgentsTile(opts),
+            focus: new FocusTile(opts),
+            day: new DayTile(opts),
+            weather: new WeatherTile(opts),
+            toggles: new Toggles(opts),
+        };
+        this._containers = [];
 
         theme.onChange(() => this._restyle());
-        this._heartbeat = 0;
-        this.updateHeader();
+        this.applyLayout(DEFAULT_LAYOUT);
     }
 
     _restyle() {
+        this.onTheme?.(this._theme.dark);
         this.actor.remove_style_class_name('hv-dark');
         this.actor.remove_style_class_name('hv-light');
         this.actor.add_style_class_name(this._theme.cssClass);
-        this.day.redraw();
-        this.timer._ring.queue_repaint();
+        for (const t of Object.values(this.tiles)) {
+            t.redraw?.();
+            t._ring?.queue_repaint();
+        }
     }
 
-    updateHeader() {
-        const now = GLib.DateTime.new_now_local();
-        const h = now.get_hour();
-        this._title.text = h < 5 ? 'Still up?' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-        this._date.text = now.format('%A, %-d %B');
+    /** Arrange tiles into the bento grid described by `layout` ([{id, slot}]). */
+    applyLayout(layout) {
+        const key = JSON.stringify(layout);
+        if (key === this._layoutKey)
+            return;
+        this._layoutKey = key;
+
+        // Detach everything first; tiles outlive their containers.
+        for (const t of Object.values(this.tiles))
+            t.actor.get_parent()?.remove_child(t.actor);
+        this._offline.get_parent()?.remove_child(this._offline);
+        for (const c of this._containers)
+            c.destroy();
+        this._containers = [];
+        this._body.remove_all_children();
+        this._body.add_child(this._offline);
+
+        const by = {hero: [], tall: [], square: [], wide: [], strip: []};
+        for (const {id, slot} of layout) {
+            const tile = this.tiles[id];
+            if (!tile || !by[slot])
+                continue;
+            tile.setSlot(slot);
+            by[slot].push(tile);
+        }
+
+        const row = (...kids) => {
+            const r = new St.BoxLayout({style_class: 'hv-bento-row'});
+            for (const k of kids)
+                r.add_child(k);
+            this._containers.push(r);
+            return r;
+        };
+        const col = (...kids) => {
+            const c = new St.BoxLayout({vertical: true, style_class: 'hv-bento-col'});
+            for (const k of kids)
+                c.add_child(k);
+            this._containers.push(c);
+            return c;
+        };
+
+        for (const t of by.hero)
+            this._body.add_child(t.actor);
+        const tall = by.tall[0], squares = by.square.slice(0, 2);
+        if (tall && squares.length)
+            this._body.add_child(row(tall.actor, col(...squares.map(s => s.actor))));
+        else if (tall)
+            this._body.add_child(row(tall.actor));
+        else if (squares.length)
+            this._body.add_child(row(...squares.map(s => s.actor)));
+        for (const t of by.wide)
+            this._body.add_child(t.actor);
+        for (const t of by.strip)
+            this._body.add_child(t.actor);
     }
 
-    /** Cap the card to the screen so a short display scrolls instead of clipping. */
+    /** Called when the popup opens: the one moment the layout may change. */
+    open(frame) {
+        this.applyLayout(frame.layout?.length ? frame.layout : DEFAULT_LAYOUT);
+        this.setFrame(frame);
+    }
+
     fitToScreen(maxHeight) {
         this._scroll.style = `max-height: ${Math.max(300, Math.floor(maxHeight))}px;`;
     }
@@ -97,16 +152,13 @@ export class Card {
         this._offline.visible = offline;
         if (offline)
             return;
-        this.now.setFrame(f);
-        this.timer.setFrame(f);
-        this.weather.setFrame(f);
-        this.toggles.setFrame(f);
-        this.agents.setFrame(f);
+        for (const t of Object.values(this.tiles))
+            if (t.slot)
+                t.setFrame(f);
     }
 
     setToday(t) {
-        this.agents.setToday(t);
-        this.day.setToday(t);
-        this.updateHeader();
+        for (const tile of Object.values(this.tiles))
+            tile.setToday(t);
     }
 }

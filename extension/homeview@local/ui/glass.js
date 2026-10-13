@@ -3,6 +3,9 @@
 // Everything is best-effort: if any piece is unavailable the card keeps its
 // translucent tint (still readable, just not blurred).
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
+import St from 'gi://St';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import Cogl from 'gi://Cogl';
 import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
@@ -22,7 +25,8 @@ void main() {
     cogl_color_out = c * a;
 }`;
 
-const RoundedClip = GObject.registerClass(
+// GType names are global, so a reloaded copy of this module needs a fresh one.
+const RoundedClip = GObject.registerClass({GTypeName: `HomeviewRoundedClip${GLib.get_monotonic_time()}`},
 class HomeviewRoundedClip extends Clutter.ShaderEffect {
     _init(radius) {
         super._init({shader_type: Cogl.ShaderType.FRAGMENT});
@@ -43,19 +47,72 @@ class HomeviewRoundedClip extends Clutter.ShaderEffect {
     }
 });
 
-/** Returns a function that removes the effects, or null if glass is unavailable. */
-export function applyGlass(actor, {radius = 32, blur = 38, brightness = 0.9} = {}) {
+/**
+ * Wrap `content` in a glass surface and return {root, destroy, setBrightness}.
+ *
+ * Shell.BlurEffect(BACKGROUND) only blurs the wallpaper, so windows behind the
+ * popup stay sharp. Instead we paint blurred live clones of the wallpaper and
+ * window layers behind the content, aligned to the screen and clipped to the
+ * card, then trim the whole thing to rounded corners.
+ * Any failure degrades to a plain translucent card (the content's own tint).
+ */
+export function createGlass(content, {radius = 30, blur = 36, brightness = 0.8} = {}) {
+    const root = new St.Widget({layout_manager: new Clutter.BinLayout(), x_expand: true, y_expand: true});
+    let backdrop = null, blurFx = null, clones = [];
+
     try {
-        const blurFx = new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND, radius: blur, brightness});
-        const clip = new RoundedClip(radius);
-        actor.add_effect_with_name('hv-clip', clip);
-        actor.add_effect_with_name('hv-blur', blurFx);
-        return () => {
-            actor.remove_effect_by_name('hv-blur');
-            actor.remove_effect_by_name('hv-clip');
+        backdrop = new St.Widget({x_expand: true, y_expand: true, clip_to_allocation: true});
+        const layers = [Main.layoutManager._backgroundGroup, global.window_group].filter(Boolean);
+        const holder = new St.Widget();
+        for (const src of layers) {
+            const c = new Clutter.Clone({source: src});
+            clones.push(c);
+            holder.add_child(c);
+        }
+        backdrop.add_child(holder);
+        blurFx = new Shell.BlurEffect({mode: Shell.BlurMode.ACTOR, radius: blur, brightness});
+        holder.add_effect_with_name('hv-blur', blurFx);
+
+        // Keep the clones pinned to the screen origin as the card moves.
+        const mon = Main.layoutManager.primaryMonitor;
+        holder.set_size(mon.x + mon.width, mon.y + mon.height);
+        const align = () => {
+            const [sx, sy] = backdrop.get_transformed_position();
+            if (!Number.isFinite(sx) || !Number.isFinite(sy))
+                return;
+            holder.set_position(-Math.round(sx), -Math.round(sy));
         };
+        // The (screen-sized) clones must not make the card screen-sized: pin the
+        // backdrop to exactly the content's size.
+        backdrop.set_size(0, 0);
+        content.connect('notify::allocation', () => {
+            const [w, h] = content.get_size();
+            if (w > 0 && h > 0)
+                backdrop.set_size(w, h);
+            align();
+        });
+        backdrop.connect('notify::mapped', align);
+        root.add_child(backdrop);
     } catch (e) {
-        logError(e, 'homeview: glass unavailable, using plain tint');
-        return null;
+        logError(e, 'homeview: backdrop blur unavailable, using a plain tint');
+        backdrop = null;
     }
+    root.add_child(content);
+
+    try {
+        root.add_effect_with_name('hv-clip', new RoundedClip(radius));
+    } catch (e) {
+        logError(e, 'homeview: rounded clip unavailable');
+    }
+
+    return {
+        root,
+        setBrightness(b) {
+            if (blurFx)
+                blurFx.brightness = b;
+        },
+        destroy() {
+            clones = [];
+        },
+    };
 }

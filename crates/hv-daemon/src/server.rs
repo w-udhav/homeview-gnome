@@ -90,6 +90,10 @@ async fn handle(stream: UnixStream, tx: mpsc::Sender<Input>, frames: Frames) {
             Some("reload") => {
                 let _ = tx.send(Input::Reload).await;
             }
+            Some("reload_ui") => {
+                // Dev convenience: tell every connected UI to rebuild itself.
+                let _ = frames.send(Arc::new(r#"{"t":"reload_ui"}"#.to_string()));
+            }
             Some("ping") => {
                 let _ = out_tx.send(r#"{"t":"pong"}"#.to_string()).await;
             }

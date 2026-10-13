@@ -1,8 +1,8 @@
-// Four round buttons in the Home-grid style: lavender when a source is on.
+// The bottom strip: round buttons, lavender when a source is on.
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
-import {tile} from './widgets.js';
+import {BentoTile} from './widgets.js';
 
 const ITEMS = [
     {id: 'mpris', name: 'Music', icon: 'audio-headphones-symbolic'},
@@ -11,14 +11,17 @@ const ITEMS = [
     {id: 'hide', name: 'Hide', icon: 'view-conceal-symbolic'},
 ];
 
-export class Toggles {
-    constructor({send, onHide}) {
-        this._send = send;
-        this._btns = new Map();
+export class Toggles extends BentoTile {
+    constructor(opts) {
+        super('toggles', opts);
+        this._onHide = opts.onHide;
         this._on = {};
+    }
 
-        this.actor = tile('hv-toggles');
-        const grid = new St.BoxLayout({style_class: 'hv-toggle-row', x_expand: true, x_align: Clutter.ActorAlign.CENTER});
+    build(_slot) {
+        this._btns = new Map();
+        this.actor.vertical = false;
+        const row = new St.BoxLayout({x_expand: true, y_expand: true, style_class: 'hv-toggle-row', x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
         for (const it of ITEMS) {
             const btn = new St.Button({
                 style_class: 'hv-toggle',
@@ -29,29 +32,30 @@ export class Toggles {
             });
             btn.connect('clicked', () => {
                 if (it.id === 'hide') {
-                    onHide();
+                    this._onHide();
                     return;
                 }
                 const next = !this._on[it.id];
                 this._on[it.id] = next;
                 this._paint(it.id);
-                this._send({t: 'toggle', source: it.id, on: next});
+                this.send({t: 'toggle', source: it.id, on: next});
             });
-            grid.add_child(btn);
+            row.add_child(btn);
             this._btns.set(it.id, btn);
+            this._paint(it.id);
         }
-        this.actor.add_child(grid);
+        this.actor.add_child(row);
     }
 
     _paint(id) {
-        const b = this._btns.get(id);
+        const b = this._btns?.get(id);
         if (!b || id === 'hide')
             return;
         if (this._on[id]) b.add_style_pseudo_class('checked');
         else b.remove_style_pseudo_class('checked');
     }
 
-    setFrame(f) {
+    update(f) {
         const s = f.sources || {};
         for (const id of ['mpris', 'browser', 'llm']) {
             if (id in s && this._on[id] !== s[id]) {

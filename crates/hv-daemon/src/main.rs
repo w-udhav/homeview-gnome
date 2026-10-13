@@ -155,6 +155,7 @@ impl Brain {
         if frames.receiver_count() > 0 {
             let mut f = self.face.frame(&self.eng, self.cfg.llm.daily_token_goal, now);
             f.sources = self.cfg.sources.clone();
+            f.focus_secs = self.work_streak as f32;
             if let Ok(s) = serde_json::to_string(&f) {
                 let _ = frames.send(Arc::new(s));
             }

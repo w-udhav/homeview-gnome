@@ -3,6 +3,7 @@
 // shows the hover card.
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
@@ -11,11 +12,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
 import {Client} from './client.js';
-import {Card} from './card.js';
-import {applyGlass} from './ui/glass.js';
-import {Theme} from './ui/theme.js';
-import {destroyArt} from './ui/art.js';
-import {drawFace, OFFLINE_FRAME} from './face.js';
+import * as ui0 from './card.js';
 
 const IDLE_MS = 90 * 1000;
 const FACE_W = 48;
@@ -23,31 +20,26 @@ const FACE_H = 28;
 
 const Indicator = GObject.registerClass(
 class HomeviewIndicator extends PanelMenu.Button {
-    _init() {
+    _init(ui) {
         super._init(0.5, 'Homeview', false);
         this.add_style_class_name('hv-button');
 
-        this._frame = OFFLINE_FRAME;
+        // `ui` is the swappable UI bundle (card.js); see swapUi().
+        this._ui = ui;
+        this._frame = ui.OFFLINE_FRAME;
         this._area = new St.DrawingArea({width: FACE_W, height: FACE_H, y_align: Clutter.ActorAlign.CENTER});
         this._area.connect('repaint', a => {
             const [w, h] = a.get_surface_size();
             const cr = a.get_context();
-            drawFace(cr, w, h, this._frame);
+            this._ui.drawFace(cr, w, h, this._frame);
             cr.$dispose();
         });
         this.add_child(this._area);
 
         // The card replaces the default menu content. The popup chrome itself is
         // made invisible (see .hv-popup); the card is the glass.
-        this._theme = new Theme();
-        this._card = new Card({
-            send: m => this._client?.send(m),
-            theme: this._theme,
-            onHide: () => this._client?.send({t: 'hide', hidden: true}),
-        });
-        this.menu.box.add_child(this._card.actor);
         this.menu._boxPointer?.add_style_class_name('hv-popup');
-        this._unglass = applyGlass(this._card.actor, {radius: 30});
+        this._buildCard();
         this._todayTimer = 0;
 
         this._hoverTimeout = 0;
@@ -58,14 +50,15 @@ class HomeviewIndicator extends PanelMenu.Button {
                 GLib.source_remove(this._todayTimer);
                 this._todayTimer = 0;
             }
+            this._glass?.destroy();
             this._theme?.destroy();
-            destroyArt();
+            this._ui.destroyArt();
             this._client = null;
         });
         this.connect('enter-event', () => {
             this._cancelClose();
             if (!this.menu.isOpen) {
-                this._card.setFrame(this._frame);
+                this._card.open(this._frame);
                 this._card.fitToScreen(Main.layoutManager.primaryMonitor.height - 90);
                 this.menu.open(false);
                 this._refreshToday();
@@ -89,6 +82,37 @@ class HomeviewIndicator extends PanelMenu.Button {
 
     attachClient(client) {
         this._client = client;
+    }
+
+    _buildCard() {
+        this._theme = new this._ui.Theme();
+        this._card = new this._ui.Card({
+            send: m => this._client?.send(m),
+            theme: this._theme,
+            onHide: () => this._client?.send({t: 'hide', hidden: true}),
+        });
+        this._glass = this._ui.createGlass(this._card.actor, {radius: 34});
+        this.menu.box.add_child(this._glass.root);
+        this._card.onTheme = dark => this._glass.setBrightness(dark ? 0.78 : 1.0);
+        this._card.onTheme(this._theme.dark);
+        this._card.open(this._frame);
+    }
+
+    /** Replace the UI with a freshly loaded bundle (hv reload-ui). */
+    swapUi(ui) {
+        if (this._dead)
+            return;
+        const wasOpen = this.menu.isOpen;
+        if (wasOpen)
+            this.menu.close(false);
+        this._glass?.root.destroy();
+        this._glass?.destroy();
+        this._theme?.destroy();
+        this._ui = ui;
+        this._buildCard();
+        this._card.fitToScreen(Main.layoutManager.primaryMonitor.height - 90);
+        this._area.queue_repaint();
+        this._refreshToday();
     }
 
     _startTodayTimer() {
@@ -138,9 +162,9 @@ class HomeviewIndicator extends PanelMenu.Button {
     setOffline() {
         if (this._dead)
             return;
-        this._frame = OFFLINE_FRAME;
+        this._frame = this._ui.OFFLINE_FRAME;
         this.visible = true;
-        this._card.setFrame(OFFLINE_FRAME);
+        this._card.setFrame(this._ui.OFFLINE_FRAME);
         this._area.queue_repaint();
     }
 
@@ -163,9 +187,50 @@ class HomeviewIndicator extends PanelMenu.Button {
     }
 });
 
+function copyTree(src, dst) {
+    dst.make_directory_with_parents(null);
+    const en = src.enumerate_children('standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
+    let info;
+    while ((info = en.next_file(null)) !== null) {
+        const name = info.get_name();
+        const s = src.get_child(name), d = dst.get_child(name);
+        if (info.get_file_type() === Gio.FileType.DIRECTORY)
+            copyTree(s, d);
+        else
+            s.copy(d, Gio.FileCopyFlags.OVERWRITE, null, null);
+    }
+}
+
+// Keep only the newest few reload copies on disk.
+function pruneOldUi(current) {
+    try {
+        const root = Gio.File.new_for_path(GLib.path_get_dirname(current));
+        const en = root.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
+        const names = [];
+        let info;
+        while ((info = en.next_file(null)) !== null)
+            names.push(info.get_name());
+        names.sort();
+        for (const n of names.slice(0, Math.max(0, names.length - 4))) {
+            const GLibRm = (f) => {
+                const e2 = f.enumerate_children('standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
+                let i2;
+                while ((i2 = e2.next_file(null)) !== null) {
+                    const c = f.get_child(i2.get_name());
+                    if (i2.get_file_type() === Gio.FileType.DIRECTORY) GLibRm(c); else c.delete(null);
+                }
+                f.delete(null);
+            };
+            GLibRm(root.get_child(n));
+        }
+    } catch (e) {
+        // best effort
+    }
+}
+
 export default class HomeviewExtension extends Extension {
     enable() {
-        this._ind = new Indicator();
+        this._ind = new Indicator(ui0);
         Main.panel.addToStatusArea(this.uuid, this._ind, 0, 'right');
 
         const path = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'homeview.sock']);
@@ -225,6 +290,35 @@ export default class HomeviewExtension extends Extension {
             this._ind?.setFrame(msg);
         else if (msg.t === 'today')
             this._ind?.setToday(msg);
+        else if (msg.t === 'reload_ui')
+            this._reloadUi().catch(e => logError(e, 'homeview: reload-ui failed'));
+    }
+
+    // --- hot reload -------------------------------------------------------
+    // GNOME caches modules by URL, so edits to this extension's files are only
+    // picked up at login. To iterate without logging out, copy the UI files to
+    // a fresh directory and import them from there (new URLs, new modules).
+    async _reloadUi() {
+        this._uiVersion = (this._uiVersion ?? 0) + 1;
+        const dest = GLib.build_filenamev([GLib.get_user_runtime_dir(), 'homeview-ui', `v${Date.now()}-${this._uiVersion}`]);
+        copyTree(Gio.File.new_for_path(this.path), Gio.File.new_for_path(dest));
+        const mod = await import(`file://${dest}/card.js`);
+
+        // Swap the stylesheet too.
+        const theme = St.ThemeContext.get_for_stage(global.stage).get_theme();
+        for (const prev of [this._loadedCss ?? Gio.File.new_for_path(`${this.path}/stylesheet.css`)]) {
+            try {
+                theme.unload_stylesheet(prev);
+            } catch (e) {
+                // not loaded
+            }
+        }
+        this._loadedCss = Gio.File.new_for_path(`${dest}/stylesheet.css`);
+        theme.load_stylesheet(this._loadedCss);
+
+        this._ind?.swapUi(mod);
+        log(`homeview: UI reloaded from ${dest}`);
+        pruneOldUi(dest);
     }
 
     // --- focus -----------------------------------------------------------

@@ -1,4 +1,4 @@
-// Now Playing: art, title/artist, scrubber, transport. Hidden when no track.
+// Now Playing, in every slot: hero / tall / square / wide.
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
@@ -6,102 +6,169 @@ import St from 'gi://St';
 import {loadArt} from './art.js';
 import {drawEq} from './draw.js';
 import {hsl} from '../robot.js';
-import {fmtTime, iconButton, label, tile} from './widgets.js';
+import {BentoTile, fmtTime, iconButton, label} from './widgets.js';
 
 const css = c => `rgb(${c.map(v => Math.round(v * 255)).join(',')})`;
 
-export class NowPlaying {
-    constructor({send, theme}) {
-        this._send = send;
-        this._theme = theme;
-        this._len = 0;
-        this._f = null;
-        this._artUrl = null;
-        this._pos = -1;
+export class NowPlaying extends BentoTile {
+    constructor(opts) {
+        super('now_playing', opts);
+        this.theme = opts.theme;
+    }
 
-        this.actor = tile('hv-np');
-        this.actor.hide();
+    _artWidget(size) {
+        const a = new St.Widget({style_class: 'hv-art', y_align: Clutter.ActorAlign.CENTER});
+        a.set_size(size, size);
+        a.set_style(`border-radius: ${Math.round(size * 0.2)}px;`);
+        return a;
+    }
 
-        const top = new St.BoxLayout({style_class: 'hv-np-top'});
-        this._art = new St.Widget({style_class: 'hv-art', y_align: Clutter.ActorAlign.CENTER});
-        const text = new St.BoxLayout({vertical: true, x_expand: true, y_align: Clutter.ActorAlign.CENTER, style_class: 'hv-np-text'});
-        this._title = label('', 'hv-np-title');
-        this._title.clutter_text.ellipsize = 3;
-        this._artist = label('', 'hv-np-artist', {x_expand: true});
-        this._artist.clutter_text.ellipsize = 3;
-        const sub = new St.BoxLayout();
-        this._eq = new St.DrawingArea({style_class: 'hv-eq', width: 14, height: 11, y_align: Clutter.ActorAlign.CENTER});
-        this._eq.connect('repaint', a => {
-            const [w, h] = a.get_surface_size();
-            const cr = a.get_context();
-            drawEq(cr, w, h, !!this._f?.playing, this._tint ?? [1, 1, 1], GLib.get_monotonic_time() / 1e6);
-            cr.$dispose();
-        });
-        sub.add_child(this._eq);
-        sub.add_child(this._artist);
-        text.add_child(this._title);
-        text.add_child(sub);
-        top.add_child(this._art);
-        top.add_child(text);
+    _btn(icon, cmd, big = false) {
+        return iconButton(icon, `hv-btn-plain ${big ? 'hv-btn-big' : ''}`, () => this.send({t: 'media', cmd}));
+    }
 
-        const ctl = new St.BoxLayout({style_class: 'hv-transport', y_align: Clutter.ActorAlign.CENTER});
-        ctl.add_child(iconButton('media-skip-backward-symbolic', 'hv-btn-plain', () => this._send({t: 'media', cmd: 'previous'})));
-        this._play = iconButton('media-playback-start-symbolic', 'hv-btn-plain hv-btn-big', () => this._send({t: 'media', cmd: 'play_pause'}));
-        ctl.add_child(this._play);
-        ctl.add_child(iconButton('media-skip-forward-symbolic', 'hv-btn-plain', () => this._send({t: 'media', cmd: 'next'})));
-        top.add_child(ctl);
-        this.actor.add_child(top);
-
-        // scrubber
-        this._track = new St.Widget({style_class: 'hv-scrub', reactive: true, x_expand: true});
-        this._fill = new St.Widget({style_class: 'hv-scrub-fill'});
-        this._track.add_child(this._fill);
-        this._track.connect('notify::width', () => this._layout());
-        this._track.connect('button-press-event', (actor, ev) => {
+    _scrubber() {
+        const track = new St.Widget({style_class: 'hv-scrub', reactive: true, x_expand: true});
+        const fill = new St.Widget({style_class: 'hv-scrub-fill'});
+        track.add_child(fill);
+        track.connect('notify::width', () => this._layoutScrub());
+        track.connect('button-press-event', (actor, ev) => {
             if (this._len <= 0)
                 return Clutter.EVENT_PROPAGATE;
             const [x] = ev.get_coords();
             const [ax] = actor.get_transformed_position();
             const frac = Math.min(1, Math.max(0, (x - ax) / actor.width));
-            this._send({t: 'media', cmd: `seek_to:${(frac * this._len).toFixed(1)}`});
+            this.send({t: 'media', cmd: `seek_to:${(frac * this._len).toFixed(1)}`});
             return Clutter.EVENT_STOP;
         });
-        this.actor.add_child(this._track);
-
-        const times = new St.BoxLayout({style_class: 'hv-times'});
-        this._elapsed = label('0:00', 'hv-small');
-        this._remain = label('', 'hv-small', {x_expand: true, x_align: Clutter.ActorAlign.END});
-        times.add_child(this._elapsed);
-        times.add_child(this._remain);
-        this.actor.add_child(times);
+        this._track = track;
+        this._fill = fill;
+        return track;
     }
 
-    _layout() {
+    _layoutScrub() {
+        if (!this._track?.get_stage())
+            return;
         const frac = this._len > 0 ? Math.min(1, Math.max(0, this._pos / this._len)) : 0;
         this._fill.set_size(Math.round(this._track.width * frac), this._track.height || 4);
     }
 
-    setFrame(f) {
-        this._f = f;
-        const has = !f.offline && !!f.title;
-        this.actor.visible = has;
-        if (!has)
-            return;
-        if (this._title.text !== f.title) this._title.text = f.title;
+    build(slot) {
+        this._len = 0;
+        this._pos = 0;
+        this._artUrl = null;
+        this._title = this._artist = this._art = this._play = this._eq = this._elapsed = this._remain = this._track = this._fill = null;
+
+        const mkEq = () => {
+            const eq = new St.DrawingArea({style_class: 'hv-eq', width: 14, height: 11, y_align: Clutter.ActorAlign.CENTER});
+            eq.connect('repaint', a => {
+                const [w, h] = a.get_surface_size();
+                const cr = a.get_context();
+                drawEq(cr, w, h, !!this.f?.playing, this._tint ?? [1, 1, 1], GLib.get_monotonic_time() / 1e6);
+                cr.$dispose();
+            });
+            return eq;
+        };
+        const texts = (titleCls, artistCls, withEq) => {
+            const col = new St.BoxLayout({vertical: true, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+            this._title = label('', titleCls);
+            this._title.clutter_text.ellipsize = 3;
+            this._artist = label('', artistCls, {x_expand: true});
+            this._artist.clutter_text.ellipsize = 3;
+            col.add_child(this._title);
+            const sub = new St.BoxLayout();
+            if (withEq) {
+                this._eq = mkEq();
+                sub.add_child(this._eq);
+            }
+            sub.add_child(this._artist);
+            col.add_child(sub);
+            return col;
+        };
+
+        if (slot === 'hero') {
+            const top = new St.BoxLayout({style_class: 'hv-gap12'});
+            this._art = this._artWidget(78);
+            top.add_child(this._art);
+            top.add_child(texts('hv-np-title-xl', 'hv-np-artist-lg', true));
+            this.actor.add_child(top);
+            this.actor.add_child(this._scrubber());
+            const times = new St.BoxLayout({style_class: 'hv-times'});
+            this._elapsed = label('0:00', 'hv-small');
+            this._remain = label('', 'hv-small', {x_expand: true, x_align: Clutter.ActorAlign.END});
+            times.add_child(this._elapsed);
+            times.add_child(this._remain);
+            this.actor.add_child(times);
+            const ctl = new St.BoxLayout({x_align: Clutter.ActorAlign.CENTER, style_class: 'hv-gap12'});
+            ctl.add_child(this._btn('media-skip-backward-symbolic', 'previous'));
+            this._play = this._btn('media-playback-start-symbolic', 'play_pause', true);
+            ctl.add_child(this._play);
+            ctl.add_child(this._btn('media-skip-forward-symbolic', 'next'));
+            this.actor.add_child(ctl);
+        } else if (slot === 'tall') {
+            this._art = this._artWidget(64);
+            this._art.x_align = Clutter.ActorAlign.CENTER;
+            this.actor.add_child(this._art);
+            const t = texts('hv-np-title', 'hv-np-artist', false);
+            t.x_align = Clutter.ActorAlign.FILL;
+            this.actor.add_child(t);
+            this.actor.add_child(this._scrubber());
+            const ctl = new St.BoxLayout({x_align: Clutter.ActorAlign.CENTER});
+            ctl.add_child(this._btn('media-skip-backward-symbolic', 'previous'));
+            this._play = this._btn('media-playback-start-symbolic', 'play_pause', true);
+            ctl.add_child(this._play);
+            ctl.add_child(this._btn('media-skip-forward-symbolic', 'next'));
+            this.actor.add_child(ctl);
+        } else if (slot === 'wide') {
+            this.actor.vertical = false;
+            this.actor.add_style_class_name('hv-gap12');
+            this._art = this._artWidget(56);
+            this.actor.add_child(this._art);
+            const col = new St.BoxLayout({vertical: true, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+            col.add_child(texts('hv-np-title', 'hv-np-artist', true));
+            col.add_child(this._scrubber());
+            this.actor.add_child(col);
+            const ctl = new St.BoxLayout({y_align: Clutter.ActorAlign.CENTER});
+            ctl.add_child(this._btn('media-skip-backward-symbolic', 'previous'));
+            this._play = this._btn('media-playback-start-symbolic', 'play_pause', true);
+            ctl.add_child(this._play);
+            ctl.add_child(this._btn('media-skip-forward-symbolic', 'next'));
+            this.actor.add_child(ctl);
+        } else { // square: art + titles, tap to play/pause
+            this.actor.vertical = false;
+            this.actor.reactive = true;
+            this.actor.add_style_class_name('hv-gap10');
+            this.actor.connect('button-press-event', () => {
+                this.send({t: 'media', cmd: 'play_pause'});
+                return Clutter.EVENT_STOP;
+            });
+            this._art = this._artWidget(52);
+            this.actor.add_child(this._art);
+            this.actor.add_child(texts('hv-np-title-sm', 'hv-np-artist-sm', false));
+        }
+    }
+
+    update(f) {
+        if (this._title && this._title.text !== f.title)
+            this._title.text = f.title || 'Nothing playing';
         const artist = f.artist || (f.playing ? 'Playing' : 'Paused');
-        if (this._artist.text !== artist) this._artist.text = artist;
+        if (this._artist && this._artist.text !== artist)
+            this._artist.text = artist;
 
-        this._tint = hsl(f.hue, 0.8, this._theme.dark ? 0.72 : 0.42);
-        this._play.child.icon_name = f.playing ? 'media-playback-pause-symbolic' : 'media-playback-start-symbolic';
+        this._tint = hsl(f.hue, 0.8, this.theme.dark ? 0.72 : 0.42);
+        if (this._play)
+            this._play.child.icon_name = f.playing ? 'media-playback-pause-symbolic' : 'media-playback-start-symbolic';
 
-        if (f.art_url !== this._artUrl) {
+        if (this._art && f.art_url !== this._artUrl) {
             this._artUrl = f.art_url;
+            const size = this._art.width;
+            const radius = `border-radius: ${Math.round(size * 0.2)}px;`;
             const a = hsl(f.hue, 0.6, 0.6), b = hsl(f.hue + 40, 0.6, 0.34);
-            this._art.set_style(`background-gradient-direction: vertical; background-gradient-start: ${css(a)}; background-gradient-end: ${css(b)};`);
+            this._art.set_style(`${radius} background-gradient-direction: vertical; background-gradient-start: ${css(a)}; background-gradient-end: ${css(b)};`);
             const url = f.art_url;
             loadArt(url).then(path => {
-                if (path && url === this._artUrl)
-                    this._art.set_style(`background-image: url("file://${path}"); background-size: 60px 60px;`);
+                if (path && url === this._artUrl && this._art)
+                    this._art.set_style(`${radius} background-image: url("file://${path}"); background-size: ${size}px ${size}px;`);
             });
         }
 
@@ -110,10 +177,10 @@ export class NowPlaying {
         if (Math.floor(pos) !== Math.floor(this._pos) || this._len !== this._lastLen) {
             this._pos = pos;
             this._lastLen = this._len;
-            this._elapsed.text = fmtTime(pos);
-            this._remain.text = this._len > 0 ? `-${fmtTime(this._len - pos)}` : '';
-            this._layout();
+            if (this._elapsed) this._elapsed.text = fmtTime(pos);
+            if (this._remain) this._remain.text = this._len > 0 ? `-${fmtTime(this._len - pos)}` : '';
+            this._layoutScrub();
         }
-        this._eq.queue_repaint();
+        this._eq?.queue_repaint();
     }
 }

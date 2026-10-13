@@ -51,12 +51,31 @@ Load `browser/extension` (unpacked in Chromium-family, temporary add-on in Firef
 
 ## The popup
 
-- **Now Playing:** art, scrubber, previous / play-pause / next for whatever player is active (MPRIS).
-- **Timer:** tap a preset or run `hv timer 15m`. An orange tick ring counts down; the eyes celebrate when it ends.
-- **Weather:** off until you opt in under `[weather]` in the config.
-- **AI activity:** Claude / Codex / Ollama status, tokens today, last finished task.
-- **Your day:** focus, energy and joy curves plus work / watch / social / read split.
-- **Toggles:** switch music, browser and AI signals on or off (saved to `config.toml`), or hide the eyes.
+A bento grid of frosted-glass tiles. The glass blurs whatever is behind it, windows included, and follows your light/dark setting.
+
+The daemon ranks what matters right now and decides which tile gets the big slot, so the popup changes with what you are doing:
+
+| Right now | Big tile |
+|---|---|
+| A timer is running | Timer (the orange tick ring) |
+| Music is playing | Now Playing |
+| An AI agent is working | AI activity |
+| You are in a work app | Focus (current streak, today's work) |
+| You are idle | Your day |
+
+The next most relevant tiles fill the remaining slots (a tall one and two squares, then a strip). Weather only appears once you turn it on. The layout is decided when you open the popup, so tiles never move under your pointer.
+
+Tiles: **Now Playing** (art, scrubber, transport over MPRIS), **Timer** (`hv timer 15m`), **Focus**, **AI activity**, **Your day**, **Weather** (opt in under `[weather]`), and a strip of toggles for music, browser and AI signals (saved to `config.toml`) plus hide.
+
+## Developing the UI without logging out
+
+GNOME caches extension code until you log in again. The popup works around that:
+
+```bash
+scripts/reload-ui.sh
+```
+
+copies your edited files over and tells the running shell to load them from a fresh location. It covers `card.js`, `face.js`, `robot.js`, `ui/*.js` and `stylesheet.css`. Edits to `extension.js` itself still need a logout. Daemon changes (`cargo`, the ranking rules in `crates/hv-core/src/layout.rs`) need only `scripts/install.sh`.
 
 ## Hide for screen sharing
 

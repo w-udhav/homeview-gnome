@@ -1,4 +1,5 @@
 use crate::config::Sources;
+use crate::layout::{self, Inputs, Placed};
 use crate::mood::{Category, Engine, Mood};
 use crate::timer::Timer;
 use crate::weather::WeatherFrame;
@@ -72,6 +73,11 @@ pub struct Frame {
     pub last_done: Option<LastDone>,
     /// Filled in by the daemon, which owns the config.
     pub sources: Sources,
+    pub category: &'static str,
+    pub app: String,
+    /// seconds in the current focus streak (set by the daemon)
+    pub focus_secs: f32,
+    pub layout: Vec<Placed>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -305,6 +311,19 @@ impl Face {
                 ago: (now - at).max(0.0) as f32,
             }),
             sources: Sources::default(),
+            category: eng.ctx.category().as_str(),
+            app: eng.ctx.app.clone(),
+            focus_secs: 0.0,
+            layout: layout::rank(&Inputs {
+                timer_active: eng.ctx.timer.active(),
+                ai_busy: eng.llm_busy(),
+                tokens_today: eng.ctx.tokens_today > 0,
+                playing: eng.ctx.playing,
+                has_track: eng.ctx.track.is_some(),
+                working: eng.ctx.category() == Category::Work && !eng.ctx.idle,
+                idle: eng.ctx.idle,
+                weather: eng.ctx.weather.is_some(),
+            }),
             food: if goal == 0 { 0.0 } else { (eng.ctx.tokens_today as f32 / goal as f32).min(1.0) },
             pose: pose(eng, now),
             mood: eng.mood,

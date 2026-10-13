@@ -54,6 +54,7 @@ fn usage() -> ! {
   hv today            print today's summary (JSON)
   hv status           print one live frame (JSON)
   hv reload           re-read config.toml
+  hv reload-ui        rebuild the popup from the installed extension files (no logout)
   hv native-host      browser native-messaging bridge (internal)"
     );
     std::process::exit(2)
@@ -175,6 +176,9 @@ fn main() {
         }
         Some("say") if args.len() >= 2 => {
             send_line(&json!({"t": "speech", "text": args[1..].join(" ")}));
+        }
+        Some("reload-ui") => {
+            send_line(&json!({"t": "reload_ui"}));
         }
         Some("reload") => {
             send_line(&json!({"t": "reload"}));

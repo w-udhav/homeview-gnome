@@ -222,14 +222,44 @@ export function drawScreen(cr, w, h, f, t, {scene = false, radius = null, bare =
         }
     }
 
-    // Eyes carry all the expression: no mouth, no cheeks.
+    // --- cheeks & mouth -----------------------------------------------------
+    const coral = [1, 0.47, 0.42];
+    const blushC = [1, 0.5, 0.6];
+    if ((f.blush > 0.1 || happy) && !closed) {
+        for (const side of [-1, 1]) {
+            col(cr, blushC, 0.38);
+            ellipse(cr, w / 2 + side * (sep + ew * 1.25), h * 0.66, u * 0.07, u * 0.045);
+            cr.fill();
+        }
+    }
+    if (!closed) {
+        const my = h * 0.72;
+        const mw = u * 0.075;
+        col(cr, coral, 1);
+        if (pose === 'cheer' || f.mouth_open > 0.05) {
+            const oh = u * (0.05 + 0.08 * Math.max(f.mouth_open, pose === 'cheer' ? 0.6 : 0));
+            cr.newPath();
+            cr.moveTo(w / 2 - mw, my - oh * 0.4);
+            cr.curveTo(w / 2 - mw, my + oh * 1.4, w / 2 + mw, my + oh * 1.4, w / 2 + mw, my - oh * 0.4);
+            cr.closePath();
+            cr.fill();
+        } else {
+            const smile = pose === 'sideeye' ? -0.1 : pose === 'work' ? 0.05 : clamp(f.mouth, -0.6, 1) * 0.6 + 0.35;
+            cr.setLineWidth(Math.max(1, u * 0.05));
+            cr.setLineCap(1);
+            cr.newPath();
+            cr.moveTo(w / 2 - mw, my);
+            cr.curveTo(w / 2 - mw * 0.4, my + smile * u * 0.16, w / 2 + mw * 0.4, my + smile * u * 0.16, w / 2 + mw, my);
+            cr.stroke();
+        }
+    }
 
     // --- glyphs ---------------------------------------------------------------
     const gs = big ? u * 0.13 : u * 0.2;      // glyph size
     const rightX = w - gs * 1.6 - u * 0.1;
     const tw = (p, s = 1) => 0.5 + 0.5 * Math.sin(t * 6 * s + p);
 
-    if (happy && big) {
+    if (happy) {
         const a1 = 0.45 + 0.55 * tw(0), a2 = 0.45 + 0.55 * tw(2.1);
         star(cr, w / 2 - sep - ew * 1.9, h * 0.2, gs * (0.55 + 0.45 * a1), gold, a1);
         star(cr, w / 2 + sep + ew * 1.9, h * 0.8, gs * (0.55 + 0.45 * a2), gold, a2);
@@ -277,9 +307,9 @@ export function drawScreen(cr, w, h, f, t, {scene = false, radius = null, bare =
 
 
 // ---------------------------------------------------------------------------
-// The panel mascot is just the eyes: no head, no screen, nothing but glowing
-// eyes and small glyphs drawn straight onto the top bar.
+// The panel face: the dark screen with its eyes, mouth and glyphs, and nothing
+// else (no white head shell, no ear pods).
 // ---------------------------------------------------------------------------
-export function drawEyes(cr, w, h, f, t) {
-    drawScreen(cr, w, h, f, t, {bare: true});
+export function drawFaceScreen(cr, w, h, f, t) {
+    drawScreen(cr, w, h, f, t, {});
 }
