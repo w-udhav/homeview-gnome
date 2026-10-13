@@ -1,0 +1,46 @@
+# Maintainer: Udhav <udhav.wadhawan@orbitaim.com>
+# Template for AUR submission. Set `url` and `source` to the published repo,
+# then fill sha256sums with `updpkgsums`.
+pkgname=homeview
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Panel companion whose face reacts to music, focus, and LLM activity (GNOME Shell extension + Rust daemon)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/udhav/homeview'
+license=('MIT')
+depends=('gnome-shell' 'dbus')
+makedepends=('cargo')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+  cargo build --frozen --release --workspace
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen --workspace
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/homeviewd "$pkgdir/usr/bin/homeviewd"
+  install -Dm755 target/release/hv "$pkgdir/usr/bin/hv"
+  install -d "$pkgdir/usr/share/gnome-shell/extensions"
+  cp -r extension/homeview@local "$pkgdir/usr/share/gnome-shell/extensions/"
+  sed 's|@BINDIR@|/usr/bin|' packaging/homeviewd.service.in > homeviewd.service
+  install -Dm644 homeviewd.service "$pkgdir/usr/lib/systemd/user/homeviewd.service"
+  install -Dm644 config.example.toml "$pkgdir/usr/share/doc/$pkgname/config.example.toml"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -d "$pkgdir/usr/share/$pkgname/browser"
+  cp -r browser/extension "$pkgdir/usr/share/$pkgname/browser/"
+  install -Dm755 scripts/install-browser-host.sh "$pkgdir/usr/share/$pkgname/install-browser-host.sh"
+}

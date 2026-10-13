@@ -1,0 +1,31 @@
+# Copy to ~/.config/homeview/config.toml. The daemon reloads it automatically
+# (or run `hv reload`). Every key is optional.
+
+# "classic" | "round" | "minimal"
+face_style = "classic"
+
+# Turn any signal off. Events from a disabled source are ignored.
+[sources]
+mpris = true     # YouTube Music etc. via MPRIS
+focus = true     # focused app + idle, reported by the shell extension
+browser = true   # active-tab domain from the browser extension
+llm = true       # Claude Code / Codex session files and hooks
+ollama = true    # poll a local Ollama
+
+# Substring matches against "app title" or a domain. Social wins over watch,
+# watch over work, work over read.
+[categories]
+work = ["code", "terminal", "kitty", "alacritty", "ptyxis", "cursor", "windsurf", "github.com", "localhost"]
+watch = ["youtube.com", "netflix", "twitch.tv"]
+social = ["twitter.com", "x.com", "reddit.com", "instagram.com", "discord", "whatsapp"]
+read = ["medium.com", "wikipedia.org", "news.ycombinator.com", "docs."]
+
+[llm]
+daily_token_goal = 2000000          # fills the "tokens eaten" meter
+claude_dir = "~/.claude/projects"
+codex_dir = "~/.codex/sessions"
+
+[ollama]
+host = "127.0.0.1:11434"
+model = ""                          # e.g. "llama3.2"; empty disables speech
+speak_every_min = 0                 # 0 = never speak

@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Homeview",
+  "version": "0.1.0",
+  "description": "Tells the local Homeview companion which site (domain only, never the URL) is in focus.",
+  "permissions": ["tabs", "nativeMessaging"],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": { "id": "homeview@local", "strict_min_version": "121.0" }
+  }
+}

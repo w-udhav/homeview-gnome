@@ -1,0 +1,18 @@
+[package]
+name = "hv-daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "homeviewd"
+path = "src/main.rs"
+
+[dependencies]
+hv-core = { path = "../hv-core" }
+hv-collectors = { path = "../hv-collectors" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+rusqlite = { version = "0.32", features = ["bundled"] }
