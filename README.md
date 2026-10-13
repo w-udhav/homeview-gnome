@@ -1,9 +1,9 @@
 # Homeview
 
-A small pixel-art creature in your GNOME panel. It acts out what you are actually doing: the song playing, the app and site in focus, Claude Code / Codex / Ollama activity, and whether you have gone idle. Hover for a "today" card. Everything stays on your machine.
+A pair of expressive eyes in your GNOME panel that react to what you are actually doing: the song playing, the app and site in focus, Claude Code / Codex / Ollama activity, and whether you have gone idle. Hover for a frosted-glass card (follows your light/dark setting) with music controls, a timer, weather, AI activity and a picture of your day. Almost everything stays on your machine (see Privacy).
 
 ```
- GNOME Shell extension (draws the creature, reports focus/idle/pointer)
+ GNOME Shell extension (draws the eyes and the popup, reports focus/idle/pointer)
         │  JSON lines over $XDG_RUNTIME_DIR/homeview.sock
  homeviewd (mood engine, springs, day log)   ◄── hv emit … (hooks, scripts)
         ▲                                    ◄── browser extension → hv native-host
@@ -49,6 +49,15 @@ Add to `~/.claude/settings.json` so the face reacts the moment Claude starts, fi
 
 Load `browser/extension` (unpacked in Chromium-family, temporary add-on in Firefox), then `scripts/install-browser-host.sh [chromium-extension-id]`. Only the **domain** of the active tab is sent.
 
+## The popup
+
+- **Now Playing:** art, scrubber, previous / play-pause / next for whatever player is active (MPRIS).
+- **Timer:** tap a preset or run `hv timer 15m`. An orange tick ring counts down; the eyes celebrate when it ends.
+- **Weather:** off until you opt in under `[weather]` in the config.
+- **AI activity:** Claude / Codex / Ollama status, tokens today, last finished task.
+- **Your day:** focus, energy and joy curves plus work / watch / social / read split.
+- **Toggles:** switch music, browser and AI signals on or off (saved to `config.toml`), or hide the eyes.
+
 ## Hide for screen sharing
 
 `hv toggle` hides the face. Bind it in GNOME: Settings → Keyboard → Custom Shortcuts → command `hv toggle`.
@@ -62,10 +71,12 @@ Load `browser/extension` (unpacked in Chromium-family, temporary add-on in Firef
 - Aggregates only (minutes per category, token totals, focus blocks, hourly mood). No raw activity log.
 - Domains, never URLs. Window titles are used for classification in memory and never stored.
 - Every source can be switched off; the socket is user-only (0600).
+- **Weather** is the one exception: when you enable it, your coordinates go to Open-Meteo. It is off by default.
+- **Album art** is fetched from the image URL your player already advertises (e.g. a video site's thumbnail CDN) and cached under `~/.cache/homeview/art`.
 
 ## CLI
 
-`hv emit …`, `hv hide|show|toggle`, `hv say <text>`, `hv today`, `hv status`, `hv reload`.
+`hv emit …`, `hv timer <15m|pause|resume|cancel|add 5m>`, `hv media <play|next|prev|seek N>`, `hv source <mpris|focus|browser|llm|ollama> <on|off>`, `hv hide|show|toggle`, `hv say <text>`, `hv today`, `hv status`, `hv reload`.
 
 ## Test
 

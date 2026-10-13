@@ -1,5 +1,7 @@
 use crate::config::Categories;
 use crate::event::{Event, LlmState};
+use crate::timer::Timer;
+use crate::weather::{self, WeatherFrame};
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 
@@ -96,6 +98,15 @@ pub struct Context {
     pub hidden: bool,
     pub speech: Option<(String, f64)>,
     pub cursor: (f32, f32),
+    pub art_url: String,
+    /// (position, length) in seconds
+    pub progress: (f32, f32),
+    pub timer: Timer,
+    pub weather: Option<WeatherFrame>,
+    /// tokens eaten today per agent
+    pub agent_tokens: HashMap<String, u64>,
+    /// (agent, how long it ran in seconds, engine time it finished)
+    pub last_done: Option<(String, f64, f64)>,
 }
 
 impl Context {
@@ -117,6 +128,7 @@ pub struct Engine {
     pub sideeye_until: f64,
     pub wave_until: f64,
     pub cheer_until: f64,
+    pub timer_done_until: f64,
     pub bounce: bool,
 }
 
@@ -135,6 +147,7 @@ impl Engine {
             sideeye_until: 0.0,
             wave_until: 0.0,
             cheer_until: 0.0,
+            timer_done_until: 0.0,
             bounce: false,
         }
     }
@@ -170,12 +183,21 @@ impl Engine {
 
     pub fn apply(&mut self, ev: &Event, now: f64) {
         match ev {
-            Event::Track { title, artist, playing } => {
+            Event::Track { title, artist, playing, art_url, length } => {
                 self.ctx.track = Some((title.clone(), artist.clone()));
                 self.ctx.playing = *playing;
+                self.ctx.art_url = art_url.clone();
+                self.ctx.progress = (0.0, *length);
                 self.mood.curiosity += 0.5;
                 self.mood.joy += 0.05;
                 self.glance_until = now + 2.5;
+            }
+            Event::Progress { pos, len } => self.ctx.progress = (*pos, *len),
+            // Commands for other parts of the daemon; nothing to learn here.
+            Event::Media { .. } | Event::Toggle { .. } => {}
+            Event::Timer { action, secs } => self.ctx.timer.apply(action, *secs),
+            Event::Weather { temp, code, hi, lo } => {
+                self.ctx.weather = Some(weather::frame(*temp, *code, *hi, *lo));
             }
             Event::Playback { playing } => {
                 if *playing && !self.ctx.playing {
@@ -220,6 +242,7 @@ impl Engine {
                 }
                 LlmState::Finished => {
                     if let Some(since) = self.ctx.llm_busy.remove(agent) {
+                        self.ctx.last_done = Some((agent.clone(), now - since, now));
                         if now - since >= 30.0 {
                             self.mood.joy += 0.6;
                             self.bounce = true;
@@ -235,7 +258,10 @@ impl Engine {
                     self.glance_until = now + 2.0;
                 }
             },
-            Event::Tokens { count, .. } => self.ctx.tokens_today += *count,
+            Event::Tokens { agent, count } => {
+                self.ctx.tokens_today += *count;
+                *self.ctx.agent_tokens.entry(agent.clone()).or_insert(0) += *count;
+            }
             Event::Cursor { x, y } => self.ctx.cursor = (x.clamp(-1.0, 1.0), y.clamp(-1.0, 1.0)),
             Event::Hide { hidden } => self.ctx.hidden = hidden.unwrap_or(!self.ctx.hidden),
             Event::Speech { text } => self.ctx.speech = Some((text.clone(), now + 12.0)),
@@ -262,6 +288,12 @@ impl Engine {
         }
         if self.ctx.playing {
             self.mood.energy += 0.004 * dt as f32;
+        }
+        if self.ctx.timer.tick(dt as f32) {
+            self.timer_done_until = now + 10.0;
+            self.cheer_until = now + 4.0;
+            self.bounce = true;
+            self.mood.joy += 0.4;
         }
         if let Some((_, until)) = &self.ctx.speech {
             if now > *until {
@@ -364,7 +396,7 @@ mod tests {
     #[test]
     fn new_track_sparks_curiosity_and_glance() {
         let mut e = engine();
-        e.apply(&Event::Track { title: "a".into(), artist: "b".into(), playing: true }, 10.0);
+        e.apply(&Event::Track { title: "a".into(), artist: "b".into(), playing: true, art_url: String::new(), length: 0.0 }, 10.0);
         assert!(e.mood.curiosity >= 0.7);
         assert!(e.glance_until > 10.0);
         assert!(e.ctx.playing);
@@ -389,5 +421,30 @@ mod tests {
             e.step(1.0, 200.0 + i as f64, 12);
         }
         assert!(e.mood.focus > before);
+    }
+
+    #[test]
+    fn timer_finishing_celebrates() {
+        let mut e = engine();
+        e.apply(&Event::Timer { action: "start".into(), secs: 2.0 }, 0.0);
+        e.step(1.0, 1.0, 12);
+        assert!(e.timer_done_until == 0.0);
+        e.step(1.5, 2.5, 12);
+        assert!(e.timer_done_until > 2.5);
+        assert!(e.cheer_until > 2.5);
+        assert!(!e.ctx.timer.active());
+    }
+
+    #[test]
+    fn agent_tokens_and_last_done() {
+        let mut e = engine();
+        e.apply(&Event::Tokens { agent: "claude".into(), count: 120 }, 1.0);
+        e.apply(&Event::Tokens { agent: "claude".into(), count: 30 }, 2.0);
+        assert_eq!(e.ctx.agent_tokens["claude"], 150);
+        e.apply(&Event::Llm { agent: "claude".into(), state: LlmState::Started }, 3.0);
+        e.apply(&Event::Llm { agent: "claude".into(), state: LlmState::Finished }, 13.0);
+        let (a, dur, _) = e.ctx.last_done.clone().unwrap();
+        assert_eq!(a, "claude");
+        assert!((dur - 10.0).abs() < 1e-6);
     }
 }

@@ -46,6 +46,9 @@ fn usage() -> ! {
   hv emit track <title> [artist]
   hv emit site <domain>
   hv emit raw '<json>'
+  hv timer <5m|90s|1h30m|pause|resume|cancel|add 5m>
+  hv media <play|next|prev|seek <secs>>
+  hv source <mpris|focus|browser|llm|ollama> <on|off>
   hv hide | show | toggle
   hv say <text>
   hv today            print today's summary (JSON)
@@ -54,6 +57,33 @@ fn usage() -> ! {
   hv native-host      browser native-messaging bridge (internal)"
     );
     std::process::exit(2)
+}
+
+/// "90", "90s", "15m", "1h30m", "1h" -> seconds.
+fn parse_duration(s: &str) -> Option<f32> {
+    let s = s.trim().to_lowercase();
+    if let Ok(n) = s.parse::<f32>() {
+        return Some(n * 60.0); // bare number means minutes
+    }
+    let (mut total, mut num) = (0.0f32, String::new());
+    for ch in s.chars() {
+        if ch.is_ascii_digit() || ch == '.' {
+            num.push(ch);
+        } else {
+            let n: f32 = num.parse().ok()?;
+            num.clear();
+            total += n * match ch {
+                'h' => 3600.0,
+                'm' => 60.0,
+                's' => 1.0,
+                _ => return None,
+            };
+        }
+    }
+    if !num.is_empty() {
+        return None;
+    }
+    (total > 0.0).then_some(total)
 }
 
 fn emit(args: &[String]) -> Value {
@@ -115,6 +145,34 @@ fn main() {
         Some("toggle") => {
             send_line(&json!({"t": "hide"}));
         }
+        Some("timer") => {
+            let a = args.get(1).map(String::as_str).unwrap_or("");
+            let v = match a {
+                "pause" | "resume" | "cancel" | "toggle" => json!({"t": "timer", "action": a}),
+                "add" => match args.get(2).and_then(|d| parse_duration(d)) {
+                    Some(secs) => json!({"t": "timer", "action": "add", "secs": secs}),
+                    None => usage(),
+                },
+                d => match parse_duration(d) {
+                    Some(secs) => json!({"t": "timer", "action": "start", "secs": secs}),
+                    None => usage(),
+                },
+            };
+            send_line(&v);
+        }
+        Some("media") => {
+            let cmd = match (args.get(1).map(String::as_str), args.get(2)) {
+                (Some("play" | "pause" | "toggle"), _) => "play_pause".to_string(),
+                (Some("next"), _) => "next".to_string(),
+                (Some("prev" | "previous"), _) => "previous".to_string(),
+                (Some("seek"), Some(n)) => format!("seek_to:{n}"),
+                _ => usage(),
+            };
+            send_line(&json!({"t": "media", "cmd": cmd}));
+        }
+        Some("source") if args.len() >= 3 => {
+            send_line(&json!({"t": "toggle", "source": args[1], "on": args[2] == "on"}));
+        }
         Some("say") if args.len() >= 2 => {
             send_line(&json!({"t": "speech", "text": args[1..].join(" ")}));
         }
@@ -140,5 +198,21 @@ fn main() {
         }
         Some("native-host") => native_host(),
         _ => usage(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_duration;
+
+    #[test]
+    fn durations() {
+        assert_eq!(parse_duration("15m"), Some(900.0));
+        assert_eq!(parse_duration("90s"), Some(90.0));
+        assert_eq!(parse_duration("1h30m"), Some(5400.0));
+        assert_eq!(parse_duration("25"), Some(1500.0));
+        assert_eq!(parse_duration("abc"), None);
+        assert_eq!(parse_duration("5x"), None);
+        assert_eq!(parse_duration("0m"), None);
     }
 }

@@ -12,6 +12,9 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
 import {Client} from './client.js';
 import {Card} from './card.js';
+import {applyGlass} from './ui/glass.js';
+import {Theme} from './ui/theme.js';
+import {destroyArt} from './ui/art.js';
 import {drawFace, OFFLINE_FRAME} from './face.js';
 
 const IDLE_MS = 90 * 1000;
@@ -34,24 +37,39 @@ class HomeviewIndicator extends PanelMenu.Button {
         });
         this.add_child(this._area);
 
-        // The card replaces the default menu content.
-        this._card = new Card({onHide: () => this._client?.send({t: 'hide', hidden: true})});
+        // The card replaces the default menu content. The popup chrome itself is
+        // made invisible (see .hv-popup); the card is the glass.
+        this._theme = new Theme();
+        this._card = new Card({
+            send: m => this._client?.send(m),
+            theme: this._theme,
+            onHide: () => this._client?.send({t: 'hide', hidden: true}),
+        });
         this.menu.box.add_child(this._card.actor);
-        const bp = this.menu._boxPointer;
-        bp?.add_style_class_name('hv-popup');
+        this.menu._boxPointer?.add_style_class_name('hv-popup');
+        this._unglass = applyGlass(this._card.actor, {radius: 30});
+        this._todayTimer = 0;
 
         this._hoverTimeout = 0;
         this.connect('destroy', () => {
             this._dead = true;
             this._cancelClose();
+            if (this._todayTimer) {
+                GLib.source_remove(this._todayTimer);
+                this._todayTimer = 0;
+            }
+            this._theme?.destroy();
+            destroyArt();
             this._client = null;
         });
         this.connect('enter-event', () => {
             this._cancelClose();
             if (!this.menu.isOpen) {
                 this._card.setFrame(this._frame);
+                this._card.fitToScreen(Main.layoutManager.primaryMonitor.height - 90);
                 this.menu.open(false);
                 this._refreshToday();
+                this._startTodayTimer();
             }
             return Clutter.EVENT_PROPAGATE;
         });
@@ -71,6 +89,19 @@ class HomeviewIndicator extends PanelMenu.Button {
 
     attachClient(client) {
         this._client = client;
+    }
+
+    _startTodayTimer() {
+        if (this._todayTimer)
+            return;
+        this._todayTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
+            if (this._dead || !this.menu.isOpen) {
+                this._todayTimer = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            this._refreshToday();
+            return GLib.SOURCE_CONTINUE;
+        });
     }
 
     _refreshToday() {

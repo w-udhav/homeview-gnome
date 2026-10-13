@@ -2,7 +2,7 @@
 //   node scripts/preview-robot.mjs out.svg
 // A tiny recorder stands in for the cairo context GNOME Shell provides.
 import {writeFileSync} from 'node:fs';
-import {drawMascot, POSE_LABEL} from '../extension/homeview@local/robot.js';
+import {drawEyes, POSE_LABEL} from '../extension/homeview@local/robot.js';
 
 class SvgCtx {
     constructor() { this.out = []; this.rgba = [0, 0, 0, 1]; this.lw = 1; this.d = ''; this.cap = 'butt'; this.tx = 0; this.ty = 0; this.stack = []; }
@@ -35,19 +35,16 @@ const variants = [
 ];
 
 let svg = '';
-const place = (cell, x, y, w, h, scale) => {
-    const ctx = new SvgCtx();
-    drawMascot(ctx, w, h, cell.f, cell.t, {mode: h >= 44 ? 'full' : 'head'});
-    svg += `<g transform="translate(${x} ${y}) scale(${scale})">${ctx.out.join('')}</g>`;
-};
-const COLS = 3, CW = 340, CH = 190;
+// Panel-sized eyes (48x28) shown at 4x on the dark top-bar colour.
+const COLS = 5, CW = 230, CH = 150, Z = 4;
 variants.forEach((v, i) => {
-    const x = (i % COLS) * CW + 12, y = Math.floor(i / COLS) * (CH + 20) + 12;
-    place(v, x, y, 312, 150, 1);               // hover-card size
-    place(v, x + 130, y + 160, 48, 28, 1);     // panel size, 1x
-    place(v, x + 190, y + 160, 48, 28, 1);
-    svg += `<text x="${x}" y="${y + 190}" fill="#ccc" font-family="sans-serif" font-size="13">${v.label}</text>`;
+    const x = (i % COLS) * CW + 12, y = Math.floor(i / COLS) * CH + 12;
+    svg += `<rect x="${x}" y="${y}" width="${48 * Z}" height="${28 * Z}" rx="10" fill="#0b0b0d"/>`;
+    const ctx = new SvgCtx();
+    drawEyes(ctx, 48, 28, v.f, v.t);
+    svg += `<g transform="translate(${x} ${y}) scale(${Z})">${ctx.out.join('')}</g>`;
+    svg += `<text x="${x}" y="${y + 28 * Z + 16}" fill="#333" font-family="sans-serif" font-size="13">${v.label}</text>`;
 });
 const rows = Math.ceil(variants.length / COLS);
-writeFileSync(out, `<svg xmlns="http://www.w3.org/2000/svg" width="${COLS * CW + 12}" height="${rows * (CH + 20) + 12}"><rect width="100%" height="100%" fill="#e9e9ee"/>${svg}</svg>`);
+writeFileSync(out, `<svg xmlns="http://www.w3.org/2000/svg" width="${COLS * CW + 12}" height="${rows * CH + 12}"><rect width="100%" height="100%" fill="#e9e9ee"/>${svg}</svg>`);
 console.log('wrote', out);

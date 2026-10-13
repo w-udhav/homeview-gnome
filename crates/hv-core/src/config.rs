@@ -78,6 +78,24 @@ impl Default for Ollama {
     }
 }
 
+/// Weather is the one signal that leaves the machine (your coordinates go to
+/// Open-Meteo), so it is off unless you turn it on.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Weather {
+    pub enabled: bool,
+    pub lat: f64,
+    pub lon: f64,
+    /// "metric" (Celsius) or "imperial" (Fahrenheit).
+    pub units: String,
+}
+
+impl Default for Weather {
+    fn default() -> Self {
+        Self { enabled: false, lat: 0.0, lon: 0.0, units: "metric".into() }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -85,6 +103,7 @@ pub struct Config {
     pub categories: Categories,
     pub llm: Llm,
     pub ollama: Ollama,
+    pub weather: Weather,
 }
 
 impl Default for Config {
@@ -94,6 +113,7 @@ impl Default for Config {
             categories: Categories::default(),
             llm: Llm::default(),
             ollama: Ollama::default(),
+            weather: Weather::default(),
         }
     }
 }

@@ -2,7 +2,7 @@ mod server;
 mod store;
 
 use chrono::{Local, Timelike};
-use hv_collectors::{llm, mpris};
+use hv_collectors::{llm, mpris, weather};
 use hv_core::config::{expand_home, socket_path};
 use hv_core::{Category, Classifier, Config, Engine, Event, Face, Source};
 use server::{Frames, Input};
@@ -28,6 +28,7 @@ struct Brain {
     block_counted: bool,
     last_speech: Instant,
     ev_tx: mpsc::Sender<Input>,
+    media_tx: mpsc::Sender<String>,
 }
 
 fn data_path() -> std::path::PathBuf {
@@ -42,12 +43,26 @@ fn today_str() -> String {
     Local::now().format("%Y-%m-%d").to_string()
 }
 
+/// Set `[sources] <name> = on` in the config file without disturbing the
+/// rest of it (comments and ordering are preserved).
+fn persist_source(path: &std::path::Path, name: &str, on: bool) -> std::io::Result<()> {
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    let mut doc = text
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    doc["sources"][name] = toml_edit::value(on);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(path, doc.to_string())
+}
+
 fn cfg_mtime() -> Option<SystemTime> {
     std::fs::metadata(Config::path()).and_then(|m| m.modified()).ok()
 }
 
 impl Brain {
-    fn new(cfg: Config, store: Store, ev_tx: mpsc::Sender<Input>) -> Self {
+    fn new(cfg: Config, store: Store, ev_tx: mpsc::Sender<Input>, media_tx: mpsc::Sender<String>) -> Self {
         let mut eng = Engine::new(Classifier::new(cfg.categories.clone()));
         eng.ctx.tokens_today = store.get("tokens") as u64;
         let seed = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(7);
@@ -65,6 +80,7 @@ impl Brain {
             block_counted: false,
             last_speech: Instant::now(),
             ev_tx,
+            media_tx,
         }
     }
 
@@ -86,11 +102,39 @@ impl Brain {
         if !self.source_enabled(ev.source()) {
             return;
         }
+        match &ev {
+            Event::Media { cmd } => {
+                let _ = self.media_tx.try_send(cmd.clone());
+                return;
+            }
+            Event::Toggle { source, on } => {
+                self.set_source(source, *on);
+                return;
+            }
+            _ => {}
+        }
         if let Event::Tokens { count, .. } = &ev {
             self.store.add("tokens", *count as f64);
         }
         let now = self.now();
         self.eng.apply(&ev, now);
+    }
+
+    /// Flip a source switch live and write it back to config.toml.
+    fn set_source(&mut self, name: &str, on: bool) {
+        let s = &mut self.cfg.sources;
+        match name {
+            "mpris" => s.mpris = on,
+            "focus" => s.focus = on,
+            "browser" => s.browser = on,
+            "llm" => s.llm = on,
+            "ollama" => s.ollama = on,
+            _ => return,
+        }
+        if let Err(e) = persist_source(&Config::path(), name, on) {
+            eprintln!("could not save config: {e}");
+        }
+        self.cfg_mtime = cfg_mtime();
     }
 
     fn on_tick(&mut self, frames: &Frames) {
@@ -109,7 +153,8 @@ impl Brain {
             rem -= d;
         }
         if frames.receiver_count() > 0 {
-            let f = self.face.frame(&self.eng, self.cfg.llm.daily_token_goal, now);
+            let mut f = self.face.frame(&self.eng, self.cfg.llm.daily_token_goal, now);
+            f.sources = self.cfg.sources.clone();
             if let Ok(s) = serde_json::to_string(&f) {
                 let _ = frames.send(Arc::new(s));
             }
@@ -247,17 +292,15 @@ async fn main() {
             }
         });
     }
-    if cfg.sources.mpris {
-        tokio::spawn(mpris::run(ev_tx.clone()));
-    }
-    if cfg.sources.llm {
-        tokio::spawn(llm::tail_sessions(ev_tx.clone(), expand_home(&cfg.llm.claude_dir), expand_home(&cfg.llm.codex_dir)));
-    }
-    if cfg.sources.ollama {
-        tokio::spawn(llm::poll_ollama(ev_tx.clone(), cfg.ollama.host.clone()));
-    }
+    // Collectors always run; the brain drops events from switched-off
+    // sources, so toggling in the UI takes effect without a restart.
+    let (media_tx, media_rx) = mpsc::channel::<String>(16);
+    tokio::spawn(mpris::run(ev_tx.clone(), media_rx));
+    tokio::spawn(llm::tail_sessions(ev_tx.clone(), expand_home(&cfg.llm.claude_dir), expand_home(&cfg.llm.codex_dir)));
+    tokio::spawn(llm::poll_ollama(ev_tx.clone(), cfg.ollama.host.clone()));
+    tokio::spawn(weather::run(ev_tx.clone()));
 
-    let mut brain = Brain::new(cfg, store, tx.clone());
+    let mut brain = Brain::new(cfg, store, tx.clone(), media_tx);
     let mut tick = tokio::time::interval(TICK);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut sec = tokio::time::interval(Duration::from_secs(1));
@@ -281,4 +324,32 @@ async fn main() {
         eprintln!("final flush: {e}");
     }
     let _ = std::fs::remove_file(&sock);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn persist_keeps_comments_and_other_keys() {
+        let p = std::env::temp_dir().join(format!("hv-cfg-{}.toml", std::process::id()));
+        std::fs::write(&p, "# my notes\nface = 1\n[sources]\nmpris = true # keep\n").unwrap();
+        persist_source(&p, "mpris", false).unwrap();
+        persist_source(&p, "browser", true).unwrap();
+        let out = std::fs::read_to_string(&p).unwrap();
+        assert!(out.contains("# my notes"));
+        assert!(out.contains("mpris = false"));
+        assert!(out.contains("browser = true"));
+        let cfg = Config::parse(&out).unwrap();
+        assert!(!cfg.sources.mpris && cfg.sources.browser);
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn persist_creates_missing_file() {
+        let p = std::env::temp_dir().join(format!("hv-cfg-new-{}/c.toml", std::process::id()));
+        persist_source(&p, "llm", false).unwrap();
+        assert!(!Config::parse(&std::fs::read_to_string(&p).unwrap()).unwrap().sources.llm);
+        let _ = std::fs::remove_dir_all(p.parent().unwrap());
+    }
 }

@@ -1,4 +1,7 @@
+use crate::config::Sources;
 use crate::mood::{Category, Engine, Mood};
+use crate::timer::Timer;
+use crate::weather::WeatherFrame;
 use serde::Serialize;
 
 /// Critically-ish damped spring, semi-implicit Euler.
@@ -59,6 +62,53 @@ pub struct Frame {
     pub food: f32,
     pub pose: &'static str,
     pub mood: Mood,
+    pub art_url: String,
+    pub position: f32,
+    pub length: f32,
+    pub timer: Timer,
+    pub timer_done: bool,
+    pub weather: Option<WeatherFrame>,
+    pub agents: Vec<AgentFrame>,
+    pub last_done: Option<LastDone>,
+    /// Filled in by the daemon, which owns the config.
+    pub sources: Sources,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentFrame {
+    pub name: String,
+    pub busy: bool,
+    /// seconds it has been running (0 when idle)
+    pub secs: f32,
+    pub tokens: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LastDone {
+    pub agent: String,
+    pub secs: f32,
+    pub ago: f32,
+}
+
+fn agents(eng: &Engine, now: f64) -> Vec<AgentFrame> {
+    let mut names: Vec<String> = ["claude", "codex", "ollama"].iter().map(|s| s.to_string()).collect();
+    for k in eng.ctx.llm_busy.keys().chain(eng.ctx.agent_tokens.keys()) {
+        if !names.contains(k) {
+            names.push(k.clone());
+        }
+    }
+    names
+        .into_iter()
+        .map(|name| {
+            let since = eng.ctx.llm_busy.get(&name).copied();
+            AgentFrame {
+                busy: since.is_some(),
+                secs: since.map(|s| (now - s).max(0.0) as f32).unwrap_or(0.0),
+                tokens: eng.ctx.agent_tokens.get(&name).copied().unwrap_or(0),
+                name,
+            }
+        })
+        .collect()
 }
 
 pub struct Face {
@@ -87,7 +137,9 @@ pub fn pose(eng: &Engine, now: f64) -> &'static str {
         "wave"
     } else if now < eng.sideeye_until {
         "sideeye"
-    } else if eng.ctx.idle || eng.mood.sleepiness > 0.8 {
+    } else if eng.ctx.idle {
+        // Only genuine idleness sleeps. Late hours droop the eyes (see
+        // Face::update) but never override what you are actually doing.
         "sleep"
     } else if eng.llm_busy() {
         "think"
@@ -102,13 +154,15 @@ pub fn pose(eng: &Engine, now: f64) -> &'static str {
     }
 }
 
+/// Track tint, kept to calm cool hues (cyan through violet) so a song never
+/// turns the eyes red.
 fn hash_hue(s: &str) -> f32 {
     let mut h: u32 = 2166136261;
     for b in s.bytes() {
         h ^= b as u32;
         h = h.wrapping_mul(16777619);
     }
-    (h % 360) as f32
+    170.0 + (h % 111) as f32
 }
 
 fn wrap_deg(d: f32) -> f32 {
@@ -238,6 +292,19 @@ impl Face {
             title: eng.ctx.track.as_ref().map(|t| t.0.clone()).unwrap_or_default(),
             artist: eng.ctx.track.as_ref().map(|t| t.1.clone()).unwrap_or_default(),
             speech: eng.ctx.speech.as_ref().map(|(s, _)| s.clone()),
+            art_url: eng.ctx.art_url.clone(),
+            position: eng.ctx.progress.0,
+            length: eng.ctx.progress.1,
+            timer: eng.ctx.timer,
+            timer_done: now < eng.timer_done_until,
+            weather: eng.ctx.weather.clone(),
+            agents: agents(eng, now),
+            last_done: eng.ctx.last_done.as_ref().map(|(a, secs, at)| LastDone {
+                agent: a.clone(),
+                secs: *secs as f32,
+                ago: (now - at).max(0.0) as f32,
+            }),
+            sources: Sources::default(),
             food: if goal == 0 { 0.0 } else { (eng.ctx.tokens_today as f32 / goal as f32).min(1.0) },
             pose: pose(eng, now),
             mood: eng.mood,
@@ -325,5 +392,43 @@ mod tests {
         assert_eq!(pose(&e, 70.0), "work");
         e.apply(&Event::Idle { idle: true }, 80.0);
         assert_eq!(pose(&e, 81.0), "sleep");
+    }
+
+    #[test]
+    fn music_at_night_does_not_nap() {
+        use crate::event::Event;
+        let mut e = eng();
+        // Very sleepy hour, but the user is active and listening.
+        for _ in 0..600 {
+            e.step(1.0, 0.0, 3);
+        }
+        assert!(e.mood.sleepiness > 0.7);
+        e.apply(&Event::Track { title: "a".into(), artist: "b".into(), playing: true, art_url: String::new(), length: 0.0 }, 1.0);
+        assert_ne!(pose(&e, 5.0), "sleep");
+        e.apply(&Event::Idle { idle: true }, 6.0);
+        assert_eq!(pose(&e, 7.0), "sleep");
+    }
+
+    #[test]
+    fn track_tint_is_never_red() {
+        for t in ["Interstellar", "Fever Dream", "x", "Red", "Crimson Tide", "abcdefg"] {
+            let h = hash_hue(t);
+            assert!((170.0..=280.0).contains(&h), "{t} -> {h}");
+        }
+    }
+
+    #[test]
+    fn frame_carries_timer_agents_and_weather() {
+        use crate::event::Event;
+        let mut e = eng();
+        e.apply(&Event::Timer { action: "start".into(), secs: 900.0 }, 0.0);
+        e.apply(&Event::Weather { temp: 21.5, code: 2, hi: 24.0, lo: 17.0 }, 0.0);
+        e.apply(&Event::Tokens { agent: "claude".into(), count: 10 }, 0.0);
+        let fr = Face::new(1).frame(&e, 1000, 1.0);
+        assert!(fr.timer.running && fr.timer.total == 900.0);
+        assert_eq!(fr.weather.as_ref().unwrap().icon, "partly");
+        assert_eq!(fr.agents[0].name, "claude");
+        assert_eq!(fr.agents[0].tokens, 10);
+        assert_eq!(fr.agents.len(), 3);
     }
 }

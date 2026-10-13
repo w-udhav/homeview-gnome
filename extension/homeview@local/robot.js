@@ -1,7 +1,7 @@
-// A little round white robot with a black screen face, big blue eyes and a
-// teal accent. drawScreen() is the expressive face; drawMascot() adds the head
-// shell, body, arms and props. Pure drawing against a cairo-like context, so
-// scripts/preview-robot.mjs can render it offline.
+// Expressive eyes: drawScreen() draws eyes (and glyphs) with an optional dark
+// screen behind them; drawEyes() is the bare version used on the panel. Pure
+// drawing against a cairo-like context so scripts/preview-robot.mjs can render
+// it offline.
 //
 // Context calls used: save restore translate setSourceRGBA setLineWidth
 // setLineCap newPath closePath moveTo lineTo curveTo arc fill stroke.
@@ -155,27 +155,23 @@ function note(cr, x, y, s, c, a) {
  * `t` is seconds on any monotonic clock. `scene` adds the glass rim and
  * larger glyphs (used in the hover card).
  */
-export function drawScreen(cr, w, h, f, t, {scene = false, radius = null} = {}) {
+export function drawScreen(cr, w, h, f, t, {scene = false, radius = null, bare = false} = {}) {
     const pose = f.pose || 'idle';
     const u = h;
     const big = h >= 44;
     const sway = f.playing ? Math.sin(t * 3.2) : 0;
 
-    // --- screen ---------------------------------------------------------
+    // --- screen (skipped in bare mode: just eyes on the panel) -----------
     const tint = f.playing ? hsl(f.hue, 0.65, 0.6) : [1, 1, 1];
     const rad = radius === null ? Math.min(u * 0.42, w / 2) : radius;
-    col(cr, [0.015, 0.015, 0.02], 1);
-    roundRect(cr, 0.5, 0.5, w - 1, h - 1, rad);
-    cr.fill();
-    // glass rim
-    col(cr, tint, f.playing ? 0.55 : 0.16);
-    cr.setLineWidth(scene ? 1.6 : 1);
-    roundRect(cr, 0.5, 0.5, w - 1, h - 1, rad);
-    cr.stroke();
-    if (scene) {
-        col(cr, [1, 1, 1], 0.04);
-        roundRect(cr, 3, 3, w - 6, h * 0.42, rad * 0.8);
+    if (!bare) {
+        col(cr, [0.015, 0.015, 0.02], 1);
+        roundRect(cr, 0.5, 0.5, w - 1, h - 1, rad);
         cr.fill();
+        col(cr, tint, f.playing ? 0.55 : 0.16);
+        cr.setLineWidth(scene ? 1.6 : 1);
+        roundRect(cr, 0.5, 0.5, w - 1, h - 1, rad);
+        cr.stroke();
     }
 
     // --- eye colours ------------------------------------------------------
@@ -233,7 +229,7 @@ export function drawScreen(cr, w, h, f, t, {scene = false, radius = null} = {}) 
     const rightX = w - gs * 1.6 - u * 0.1;
     const tw = (p, s = 1) => 0.5 + 0.5 * Math.sin(t * 6 * s + p);
 
-    if (happy) {
+    if (happy && big) {
         const a1 = 0.45 + 0.55 * tw(0), a2 = 0.45 + 0.55 * tw(2.1);
         star(cr, w / 2 - sep - ew * 1.9, h * 0.2, gs * (0.55 + 0.45 * a1), gold, a1);
         star(cr, w / 2 + sep + ew * 1.9, h * 0.8, gs * (0.55 + 0.45 * a2), gold, a2);
@@ -281,90 +277,9 @@ export function drawScreen(cr, w, h, f, t, {scene = false, radius = null} = {}) 
 
 
 // ---------------------------------------------------------------------------
-// The mascot is just the face: a white shell around the screen, with ear pods
-// and (while music plays) headphones. Eyes carry all the expression.
+// The panel mascot is just the eyes: no head, no screen, nothing but glowing
+// eyes and small glyphs drawn straight onto the top bar.
 // ---------------------------------------------------------------------------
-
-const WHITE = [0.965, 0.972, 0.985];
-const SHADE = [0.72, 0.77, 0.84];
-
-function shaded(cr, drawPath, dy = 3) {
-    // a white shape with a soft darker edge peeking out below
-    cr.save();
-    cr.translate(0, dy);
-    col(cr, SHADE, 1);
-    drawPath();
-    cr.fill();
-    cr.restore();
-    col(cr, WHITE, 1);
-    drawPath();
-    cr.fill();
-}
-
-/**
- * mode 'head': the small panel icon. mode 'full': the large face on a dark
- * tile for the hover card.
- */
-export function drawMascot(cr, w, h, f, t, {mode = 'head'} = {}) {
-    const teal = f.offline ? [0.6, 0.62, 0.65] : f.playing ? hsl(f.hue, 0.5, 0.7) : [0.5, 0.85, 0.82];
-
-    if (mode === 'head') {
-        const r = h * 0.46;
-        shaded(cr, () => roundRect(cr, 0.5, 0.5, w - 1, h - 2, r), 1.5);
-        cr.save();
-        cr.translate(2.5, 2.5);
-        drawScreen(cr, w - 5, h - 7, f, t, {radius: (h - 7) * 0.42});
-        cr.restore();
-        if (f.playing && !f.offline) {
-            col(cr, teal, 1);
-            ellipse(cr, 1.5, h * 0.5, 2, h * 0.2); cr.fill();
-            ellipse(cr, w - 1.5, h * 0.5, 2, h * 0.2); cr.fill();
-        }
-        return;
-    }
-
-    // --- hover-card hero --------------------------------------------------
-    const pose = f.pose || 'idle';
-    const cx = w / 2;
-    const sway = f.playing ? Math.sin(t * 3.2) * 4 : 0;
-    const bob = pose === 'sleep' ? 6 : pose === 'cheer' ? -Math.abs(Math.sin(t * 5)) * 8 : Math.sin(t * 2) * 1.6;
-
-    col(cr, [0.05, 0.055, 0.075], 1);
-    roundRect(cr, 0.5, 0.5, w - 1, h - 1, 26);
-    cr.fill();
-    col(cr, teal, 0.07);
-    ellipse(cr, cx, h * 0.5, w * 0.34, h * 0.46); cr.fill();
-    col(cr, teal, 0.045);
-    ellipse(cr, cx, h * 0.5, w * 0.44, h * 0.6); cr.fill();
-
-    const hw = Math.min(w * 0.7, h * 1.55);
-    const hh = h * 0.72;
-    const hx = cx - hw / 2 + sway;
-    const hy = (h - hh) / 2 + bob;
-
-    shaded(cr, () => roundRect(cr, hx, hy, hw, hh, hh * 0.44), 4);
-    for (const side of [-1, 1]) {
-        const ex = side < 0 ? hx - 3 : hx + hw + 3;
-        const ey = hy + hh * 0.52;
-        shaded(cr, () => ellipse(cr, ex, ey, hh * 0.1, hh * 0.18), 2);
-        col(cr, SHADE, 0.6);
-        ellipse(cr, ex, ey, hh * 0.05, hh * 0.1); cr.fill();
-    }
-    cr.save();
-    cr.translate(hx + hw * 0.06, hy + hh * 0.1);
-    drawScreen(cr, hw * 0.88, hh * 0.8, f, t, {scene: true, radius: hh * 0.36});
-    cr.restore();
-
-    if (f.playing && pose !== 'sleep') {
-        col(cr, teal, 1);
-        cr.setLineWidth(8);
-        cr.setLineCap(1);
-        cr.newPath();
-        cr.moveTo(hx - 3, hy + hh * 0.5);
-        cr.curveTo(hx - 3, hy - hh * 0.3, hx + hw + 3, hy - hh * 0.3, hx + hw + 3, hy + hh * 0.5);
-        cr.stroke();
-        for (const ex of [hx - 4, hx + hw + 4]) {
-            ellipse(cr, ex, hy + hh * 0.52, hh * 0.13, hh * 0.22); cr.fill();
-        }
-    }
+export function drawEyes(cr, w, h, f, t) {
+    drawScreen(cr, w, h, f, t, {bare: true});
 }

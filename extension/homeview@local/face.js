@@ -1,13 +1,13 @@
 // Cairo-side helpers: the robot (via robot.js) and the mood-arc chart.
 import GLib from 'gi://GLib';
-import {drawMascot, OFFLINE_FRAME} from './robot.js';
+import {drawEyes, OFFLINE_FRAME} from './robot.js';
 
 export {OFFLINE_FRAME};
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-export function drawFace(cr, w, h, f, opts = {}) {
-    drawMascot(cr, w, h, f, GLib.get_monotonic_time() / 1e6, opts);
+export function drawFace(cr, w, h, f) {
+    drawEyes(cr, w, h, f, GLib.get_monotonic_time() / 1e6);
 }
 
 /** Smooth line chart of focus / energy / joy across the day. */

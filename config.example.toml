@@ -26,3 +26,11 @@ codex_dir = "~/.codex/sessions"
 host = "127.0.0.1:11434"
 model = ""                          # e.g. "llama3.2"; empty disables speech
 speak_every_min = 0                 # 0 = never speak
+
+# Weather is the only signal that leaves your machine: your coordinates are sent
+# to Open-Meteo (https://open-meteo.com, no account or key). Off by default.
+[weather]
+enabled = false
+lat = 0.0
+lon = 0.0
+units = "metric"     # or "imperial"

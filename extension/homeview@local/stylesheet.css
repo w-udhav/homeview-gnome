@@ -1,186 +1,108 @@
-/* Homeview: black glass, rounded tiles, big light numerals, one warm accent. */
+/* Homeview: Apple HomeView-style glass. One card of rounded tiles; light or
+   dark follows the system via .hv-dark / .hv-light on .hv-card. */
 
-.hv-button {
-  padding-left: 4px;
-  padding-right: 4px;
-}
+.hv-button { padding-left: 4px; padding-right: 4px; }
 
-/* The popup shell: near-black, large radius, no arrow. */
-.hv-popup {
-  -arrow-background-color: #0b0b0e;
-  -arrow-border-color: rgba(255, 255, 255, 0.08);
-  -arrow-border-width: 1px;
-  -arrow-border-radius: 32px;
+/* The popup chrome disappears: the card is the glass. */
+.popup-menu-boxpointer.hv-popup, .hv-popup {
+  -arrow-background-color: transparent;
+  -arrow-border-color: transparent;
+  -arrow-border-width: 0;
+  -arrow-border-radius: 30px;
   -arrow-base: 0;
   -arrow-rise: 0;
-  -boxpointer-gap: 10px;
-  -arrow-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  -boxpointer-gap: 8px;
+  -arrow-shadow: 0 0 0 rgba(0, 0, 0, 0);
 }
+.hv-popup .popup-menu-content { padding: 0; margin: 0; background: none; border: none; box-shadow: none; }
 
-.hv-popup .popup-menu-content {
-  padding: 0;
-  margin: 0;
-}
+/* --- surface ------------------------------------------------------------ */
+.hv-card { width: 380px; border-radius: 30px; }
+.hv-dark.hv-card  { background-color: rgba(24, 24, 30, 0.50); border: 1px solid rgba(255, 255, 255, 0.14); color: #ffffff; }
+.hv-light.hv-card { background-color: rgba(250, 250, 253, 0.55); border: 1px solid rgba(255, 255, 255, 0.70); color: #16161b; }
+.hv-scroll { }
+.hv-body { padding: 16px; spacing: 10px; }
 
-.hv-card {
-  width: 340px;
-  padding: 18px 16px 16px 16px;
-  spacing: 8px;
-  color: #ffffff;
-}
+/* --- text ------------------------------------------------------------------ */
+.hv-header { padding: 2px 6px 4px 6px; }
+.hv-title { font-size: 24px; font-weight: 300; }
+.hv-date, .hv-small, .hv-tile-label, .hv-np-artist, .hv-agent-status, .hv-weather-desc, .hv-toggle-name, .hv-times { font-size: 12px; }
+.hv-dark  .hv-date, .hv-dark  .hv-small, .hv-dark  .hv-np-artist, .hv-dark  .hv-agent-status, .hv-dark  .hv-weather-desc, .hv-dark  .hv-toggle-name, .hv-dark  .hv-tile-label { color: rgba(255, 255, 255, 0.62); }
+.hv-light .hv-date, .hv-light .hv-small, .hv-light .hv-np-artist, .hv-light .hv-agent-status, .hv-light .hv-weather-desc, .hv-light .hv-toggle-name, .hv-light .hv-tile-label { color: rgba(0, 0, 0, 0.56); }
+.hv-tile-label { font-weight: 600; padding-bottom: 6px; }
+.hv-offline { font-size: 12px; font-weight: 600; color: #ff9f0a; }
 
-.hv-header {
-  padding: 0 6px 4px 6px;
-}
+/* --- tiles ----------------------------------------------------------------- */
+.hv-tile { border-radius: 24px; padding: 12px 14px; }
+.hv-dark  .hv-tile { background-color: rgba(255, 255, 255, 0.09); }
+.hv-light .hv-tile { background-color: rgba(255, 255, 255, 0.60); }
+.hv-row { spacing: 10px; }
+.hv-col { spacing: 10px; }
 
-.hv-title {
-  font-size: 22px;
-  font-weight: 300;
-  color: #ffffff;
-}
+/* now playing */
+.hv-np-top { spacing: 12px; }
+.hv-art { width: 60px; height: 60px; border-radius: 14px; background-color: rgba(128, 128, 128, 0.3); }
+.hv-np-title { font-size: 15px; font-weight: 700; }
+.hv-eq { margin-right: 6px; }
+.hv-scrub { height: 4px; border-radius: 2px; margin-top: 10px; }
+.hv-dark  .hv-scrub { background-color: rgba(255, 255, 255, 0.22); }
+.hv-light .hv-scrub { background-color: rgba(0, 0, 0, 0.14); }
+.hv-scrub-fill { height: 4px; border-radius: 2px; }
+.hv-dark  .hv-scrub-fill { background-color: #ffffff; }
+.hv-light .hv-scrub-fill { background-color: #16161b; }
+.hv-times { padding-top: 4px; }
+.hv-transport { spacing: 0; }
+.hv-btn { border-radius: 999px; padding: 7px; }
+.hv-btn-icon { icon-size: 18px; }
+.hv-btn-big { padding: 7px 9px; }
+.hv-btn-big .hv-btn-icon { icon-size: 26px; }
+.hv-dark  .hv-btn:hover { background-color: rgba(255, 255, 255, 0.14); }
+.hv-light .hv-btn:hover { background-color: rgba(0, 0, 0, 0.08); }
 
-.hv-date {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.55);
-}
+/* timer */
+.hv-timer { padding: 12px 12px 10px 12px; }
+.hv-timer-time { font-size: 30px; font-weight: 300; }
+.hv-timer-cap { font-size: 10px; font-weight: 700; color: #ff9f0a; padding-top: 2px; }
+.hv-chips { spacing: 6px; padding-top: 6px; }
+.hv-chip { border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
+.hv-dark  .hv-chip { background-color: rgba(255, 255, 255, 0.12); }
+.hv-light .hv-chip { background-color: rgba(0, 0, 0, 0.07); }
+.hv-dark  .hv-chip:hover { background-color: rgba(255, 255, 255, 0.22); }
+.hv-light .hv-chip:hover { background-color: rgba(0, 0, 0, 0.14); }
+.hv-chip-accent { background-color: #ff9f0a !important; color: #ffffff; }
 
-.hv-hero {
-  spacing: 8px;
-}
+/* weather */
+.hv-weather-icon { icon-size: 26px; }
+.hv-weather-temp { font-size: 34px; font-weight: 300; }
+.hv-weather-desc { font-weight: 600; }
 
-.hv-screen {
-  border-radius: 26px;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
-}
+/* toggles */
+.hv-toggles { padding: 8px 10px; }
+.hv-toggle-row { spacing: 5px; }
+.hv-toggle { width: 30px; height: 30px; border-radius: 999px; }
+.hv-toggle-icon { icon-size: 15px; }
+.hv-dark  .hv-toggle { background-color: rgba(255, 255, 255, 0.12); }
+.hv-light .hv-toggle { background-color: rgba(0, 0, 0, 0.07); }
+.hv-toggle:checked { background-color: #a08cf5; color: #ffffff; }
+.hv-toggle-name { font-size: 10px; }
 
-.hv-caption {
-  padding: 0 8px;
-  spacing: 12px;
-}
+/* AI activity */
+.hv-track { height: 6px; border-radius: 3px; margin: 2px 0 8px 0; }
+.hv-dark  .hv-track { background-color: rgba(255, 255, 255, 0.16); }
+.hv-light .hv-track { background-color: rgba(0, 0, 0, 0.10); }
+.hv-track-fill { height: 6px; border-radius: 3px; background-color: #ff9f0a; }
+.hv-agent-rows { spacing: 4px; }
+.hv-agent-row { spacing: 8px; }
+.hv-agent-dot { width: 8px; height: 8px; border-radius: 4px; background-color: rgba(128, 128, 128, 0.45); }
+.hv-agent-dot-busy { background-color: #ff9f0a; }
+.hv-agent-name { font-size: 13px; font-weight: 600; }
+.hv-agent-tokens { font-size: 12px; font-weight: 600; }
 
-.hv-pose {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.hv-speech {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.hv-tile {
-  background-color: rgba(255, 255, 255, 0.075);
-  border-radius: 22px;
-  padding: 12px 14px;
-}
-
-.hv-row {
-  spacing: 10px;
-}
-
-.hv-tile-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.55);
-  padding-bottom: 6px;
-}
-
-.hv-tile-value {
-  font-size: 18px;
-  color: #ffffff;
-}
-
-.hv-np {
-  spacing: 12px;
-  padding: 12px 16px 12px 12px;
-}
-
-.hv-art {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  background-color: rgba(255, 255, 255, 0.12);
-}
-
-.hv-np-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.hv-np-artist {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-/* The warm tile, like the amber widgets on HomeView. */
-.hv-amber {
-  background-gradient-direction: vertical;
-  background-gradient-start: #f6b36a;
-  background-gradient-end: #e2772f;
-}
-
-.hv-amber-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.8);
-  padding-bottom: 6px;
-}
-
-.hv-track {
-  height: 6px;
-  margin-top: 10px;
-  border-radius: 3px;
-  background-color: rgba(255, 255, 255, 0.3);
-}
-
-.hv-track-fill {
-  height: 6px;
-  border-radius: 3px;
-  background-color: #ffffff;
-}
-
-.hv-story {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.92);
-  padding-bottom: 8px;
-}
-
-.hv-arc {
-  border-radius: 10px;
-  background-color: rgba(255, 255, 255, 0.04);
-}
-
-.hv-legend {
-  padding-top: 8px;
-  spacing: 6px;
-}
-
-.hv-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 4px;
-  margin-left: 6px;
-}
-
-.hv-small {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.hv-foot {
-  padding-top: 2px;
-}
-
-.hv-pill {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  padding: 8px 18px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #ffffff;
-}
-
-.hv-pill:hover {
-  background-color: rgba(255, 255, 255, 0.18);
-}
+/* your day */
+.hv-story { font-size: 13px; padding-bottom: 8px; }
+.hv-chart { border-radius: 12px; }
+.hv-dark  .hv-chart { background-color: rgba(255, 255, 255, 0.05); }
+.hv-light .hv-chart { background-color: rgba(0, 0, 0, 0.04); }
+.hv-split { margin-top: 8px; border-radius: 4px; }
+.hv-legend { padding-top: 6px; spacing: 5px; }
+.hv-dot { width: 8px; height: 8px; border-radius: 4px; margin-left: 4px; }
