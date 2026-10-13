@@ -1,4 +1,4 @@
-# Maintainer: Udhav <udhav.wadhawan@orbitaim.com>
+# Maintainer: w-udhav <https://github.com/w-udhav>
 # Template for AUR submission. Set `url` and `source` to the published repo,
 # then fill sha256sums with `updpkgsums`.
 pkgname=homeview
@@ -6,7 +6,7 @@ pkgver=0.1.0
 pkgrel=1
 pkgdesc='Panel companion whose face reacts to music, focus, and LLM activity (GNOME Shell extension + Rust daemon)'
 arch=('x86_64' 'aarch64')
-url='https://github.com/udhav/homeview'
+url='https://github.com/w-udhav/homeview-gnome'
 license=('MIT')
 depends=('gnome-shell' 'dbus')
 makedepends=('cargo')

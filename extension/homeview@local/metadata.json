@@ -3,5 +3,5 @@
   "name": "Homeview",
   "description": "A small panel companion whose face reacts to what you are doing. UI for the homeviewd daemon.",
   "shell-version": ["48", "49", "50"],
-  "url": "https://github.com/udhav/homeview"
+  "url": "https://github.com/w-udhav/homeview-gnome"
 }
