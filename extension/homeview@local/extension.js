@@ -9,11 +9,10 @@ import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
-import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import {Client} from './client.js';
 import {Card} from './card.js';
-import {drawCreature, OFFLINE_FRAME} from './face.js';
+import {drawFace, OFFLINE_FRAME} from './face.js';
 
 const IDLE_MS = 90 * 1000;
 const FACE_W = 48;
@@ -30,18 +29,16 @@ class HomeviewIndicator extends PanelMenu.Button {
         this._area.connect('repaint', a => {
             const [w, h] = a.get_surface_size();
             const cr = a.get_context();
-            drawCreature(cr, w, h, this._frame);
+            drawFace(cr, w, h, this._frame);
             cr.$dispose();
         });
         this.add_child(this._area);
 
-        // Card inside the popup menu.
-        this._card = new Card();
-        const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        item.add_child(this._card.actor);
-        this.menu.addMenuItem(item);
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        this._hideItem = this.menu.addAction('Hide (for screen sharing)', () => this._client?.send({t: 'hide', hidden: true}));
+        // The card replaces the default menu content.
+        this._card = new Card({onHide: () => this._client?.send({t: 'hide', hidden: true})});
+        this.menu.box.add_child(this._card.actor);
+        const bp = this.menu._boxPointer;
+        bp?.add_style_class_name('hv-popup');
 
         this._hoverTimeout = 0;
         this.connect('destroy', () => {
@@ -52,6 +49,7 @@ class HomeviewIndicator extends PanelMenu.Button {
         this.connect('enter-event', () => {
             this._cancelClose();
             if (!this.menu.isOpen) {
+                this._card.setFrame(this._frame);
                 this.menu.open(false);
                 this._refreshToday();
             }
@@ -103,7 +101,6 @@ class HomeviewIndicator extends PanelMenu.Button {
         this.visible = !f.hidden;
         if (this.menu.isOpen)
             this._card.setFrame(f);
-        this._card.setNow([f.status, f.speech ? `“${f.speech}”` : ''].filter(Boolean).join('\n'));
         this._area.queue_repaint();
     }
 
@@ -113,7 +110,6 @@ class HomeviewIndicator extends PanelMenu.Button {
         this._frame = OFFLINE_FRAME;
         this.visible = true;
         this._card.setFrame(OFFLINE_FRAME);
-        this._card.setNow('homeviewd is not running');
         this._area.queue_repaint();
     }
 
