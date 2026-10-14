@@ -105,12 +105,12 @@
 .hv-light .hv-card-btn { background-color: rgba(255, 255, 255, 0.58); }
 .hv-dark  .hv-card-btn:hover { background-color: rgba(255, 255, 255, 0.18); }
 .hv-light .hv-card-btn:hover { background-color: rgba(255, 255, 255, 0.80); }
-.hv-card-btn:checked { background-color: rgba(150, 128, 245, 0.82) !important; color: #ffffff; }
+.hv-card-btn:checked { background-color: #ffc21a !important; color: #111111; }
 .hv-card-icon { icon-size: 18px; }
 .hv-card-name { font-size: 11px; font-weight: 600; padding-top: 3px; }
 .hv-dark  .hv-card-name { color: rgba(255, 255, 255, 0.75); }
 .hv-light .hv-card-name { color: rgba(0, 0, 0, 0.62); }
-.hv-card-btn:checked .hv-card-name { color: #ffffff; }
+.hv-card-btn:checked .hv-card-name { color: #111111; }
 
 /* AI activity */
 .hv-track { height: 6px; border-radius: 3px; margin: 4px 0; }

@@ -75,15 +75,33 @@ function ellipse(cr, cx, cy, rx, ry) {
     cr.closePath();
 }
 
+// A squircle (superellipse, |x/rx|^n + |y/ry|^n = 1): rounder than a rounded
+// rectangle, squarer than an oval. n = 4 is the classic squircle.
+function squircle(cr, cx, cy, rx, ry, n = 4) {
+    if (rx <= 0 || ry <= 0)
+        return;
+    const steps = 48;
+    cr.newPath();
+    for (let i = 0; i < steps; i++) {
+        const t = (i / steps) * 2 * Math.PI;
+        const c = Math.cos(t), s = Math.sin(t);
+        const x = cx + rx * Math.sign(c) * Math.pow(Math.abs(c), 2 / n);
+        const y = cy + ry * Math.sign(s) * Math.pow(Math.abs(s), 2 / n);
+        if (i === 0) cr.moveTo(x, y);
+        else cr.lineTo(x, y);
+    }
+    cr.closePath();
+}
+
 // Soft glow: a couple of wider, fainter copies under the solid shape.
-function glowEllipse(cr, cx, cy, rx, ry, c, a = 1) {
+function glowEye(cr, cx, cy, rx, ry, c, a = 1) {
     for (const [s, al] of [[1.45, 0.07], [1.22, 0.12]]) {
         col(cr, c, al * a);
-        ellipse(cr, cx, cy, rx * s, ry * s);
+        squircle(cr, cx, cy, rx * s, ry * s);
         cr.fill();
     }
     col(cr, c, a);
-    ellipse(cr, cx, cy, rx, ry);
+    squircle(cr, cx, cy, rx, ry);
     cr.fill();
 }
 
@@ -213,7 +231,7 @@ export function drawScreen(cr, w, h, f, t, {scene = false, radius = null, bare =
             archEye(cr, ex, ey + u * 0.08, ew * 0.9, u * 0.12, u * 0.07, eyeC, false);
         } else {
             const ry = Math.max(u * 0.02, ryBase * open * squint);
-            glowEllipse(cr, ex, ey, ew, ry, eyeC);
+            glowEye(cr, ex, ey, ew, ry, eyeC);
             if (ry > u * 0.1) {
                 col(cr, [1, 1, 1], 0.75);
                 ellipse(cr, ex - ew * 0.3, ey - ry * 0.38, ew * 0.2, ry * 0.16);

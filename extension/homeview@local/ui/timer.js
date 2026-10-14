@@ -5,7 +5,7 @@ import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
 import {ACCENT, drawSegments} from './draw.js';
-import {BentoTile, fmtTime, label} from './widgets.js';
+import {BentoTile, fmtTime, label, onTap} from './widgets.js';
 
 const PRESETS = [5, 15, 25, 45]; // minutes, cycled by the secondary button when idle
 const SEGMENTS = 10;
@@ -24,6 +24,7 @@ export class TimerTile extends BentoTile {
     }
 
     _primaryClicked() {
+        log(`homeview: timer primary tapped (${this._active() ? 'stop' : 'start'})`);
         if (this._active())
             this.send({t: 'timer', action: 'cancel'});
         else
@@ -49,7 +50,7 @@ export class TimerTile extends BentoTile {
             x_expand: !compact,
             child: new St.Icon({icon_name: 'media-playback-start-symbolic', style_class: 'hv-tbtn-icon'}),
         });
-        b.connect('clicked', () => this._primaryClicked());
+        onTap(b, () => this._primaryClicked());
         this._pbtn = b;
         return b;
     }
@@ -62,7 +63,7 @@ export class TimerTile extends BentoTile {
             x_expand: !compact,
             label: '+1:00',
         });
-        b.connect('clicked', () => this._secondaryClicked());
+        onTap(b, () => this._secondaryClicked());
         this._sbtn = b;
         return b;
     }

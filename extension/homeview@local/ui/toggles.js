@@ -2,7 +2,7 @@
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
-import {BentoTile} from './widgets.js';
+import {BentoTile, onTap} from './widgets.js';
 
 const ITEMS = [
     {id: 'mpris', name: 'Music', icon: 'audio-headphones-symbolic'},
@@ -36,7 +36,7 @@ export class Toggles extends BentoTile {
                 accessible_name: it.name,
                 child: box,
             });
-            btn.connect('clicked', () => {
+            onTap(btn, () => {
                 if (it.id === 'hide') {
                     this._onHide();
                     return;

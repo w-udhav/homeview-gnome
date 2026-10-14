@@ -1,5 +1,6 @@
 // Small St building blocks shared by the tiles.
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import St from 'gi://St';
 
 // Bento grid: two columns of 172 with an 8px gutter, rows of 84. Corner radii
@@ -69,6 +70,32 @@ export function tile(cls = '', {vertical = true, expand = true} = {}) {
     return new St.BoxLayout({style_class: `hv-tile ${cls}`, vertical, x_expand: expand});
 }
 
+/**
+ * Run `fn` when an St.Button is tapped. Listens for both `clicked` and the
+ * raw press, because a press that never produces `clicked` (the release
+ * landing elsewhere, or being grabbed by the popup) would otherwise do
+ * nothing. Whichever comes first fires; the other is ignored for 300ms.
+ */
+export function onTap(actor, fn) {
+    let last = 0;
+    const fire = () => {
+        const now = GLib.get_monotonic_time();
+        if (now - last < 300000)
+            return;
+        last = now;
+        try {
+            fn();
+        } catch (e) {
+            logError(e, 'homeview: tap handler failed');
+        }
+    };
+    actor.connect('clicked', fire);
+    actor.connect('button-press-event', () => {
+        fire();
+        return Clutter.EVENT_PROPAGATE;
+    });
+}
+
 export function iconButton(iconName, cls = '', onClick = null) {
     const b = new St.Button({
         style_class: `hv-btn ${cls}`,
@@ -79,14 +106,14 @@ export function iconButton(iconName, cls = '', onClick = null) {
         y_align: Clutter.ActorAlign.CENTER,
     });
     if (onClick)
-        b.connect('clicked', onClick);
+        onTap(b, onClick);
     return b;
 }
 
 export function textButton(text, cls = '', onClick = null) {
     const b = new St.Button({style_class: `hv-chip ${cls}`, label: text, can_focus: true, reactive: true});
     if (onClick)
-        b.connect('clicked', onClick);
+        onTap(b, onClick);
     return b;
 }
 
