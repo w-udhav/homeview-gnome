@@ -97,6 +97,33 @@ export function artPalette(path) {
     return result;
 }
 
+/**
+ * A copy of the art centre-cropped to w:h and scaled to 2x, cached on disk.
+ * St cannot "cover" a background and does not clip one that overflows, so the
+ * full-bleed tiles need an image of exactly their aspect ratio.
+ */
+export function cropToTile(path, w, h) {
+    const out = `${path}-${w}x${h}.png`;
+    if (GLib.file_test(out, GLib.FileTest.EXISTS))
+        return out;
+    try {
+        const src = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 1000, 1000, true);
+        const sw = src.get_width(), sh = src.get_height();
+        const want = w / h;
+        let cw = sw, ch = sh;
+        if (sw / sh > want)
+            cw = Math.round(sh * want);
+        else
+            ch = Math.round(sw / want);
+        const sub = src.new_subpixbuf(Math.floor((sw - cw) / 2), Math.floor((sh - ch) / 2), cw, ch);
+        const scaled = sub.scale_simple(w * 2, h * 2, GdkPixbuf.InterpType.BILINEAR);
+        scaled.savev(out, 'png', [], []);
+        return out;
+    } catch (e) {
+        return null;
+    }
+}
+
 export function destroyArt() {
     palettes.clear();
     session?.abort();

@@ -137,3 +137,10 @@
 .hv-np-colored .hv-scrub-fill { background-color: #ffffff; }
 .hv-np-colored .hv-btn { color: #ffffff; }
 .hv-np-colored .hv-btn:hover { background-color: rgba(255, 255, 255, 0.18); }
+
+/* Full-bleed Now Playing: the cover is the tile; a scrim keeps text readable. */
+.hv-np-bleed { padding: 0; }
+.hv-np-scrim { background-gradient-direction: vertical; background-gradient-start: rgba(0, 0, 0, 0); background-gradient-end: rgba(0, 0, 0, 0.78); border-radius: 0 0 22px 22px; }
+.hv-np-bleed-content { padding: 10px 14px 10px 14px; }
+.hv-np-bleed .hv-np-title, .hv-np-bleed .hv-np-title-xl { text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
+.hv-np-stack { border-radius: 22px; }

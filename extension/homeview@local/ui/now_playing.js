@@ -3,11 +3,11 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 
-import {artPalette, loadArt} from './art.js';
+import {artPalette, cropToTile, loadArt} from './art.js';
 import {paletteFromHue, toCss} from './palette.js';
 import {drawEq} from './draw.js';
 import {hsl} from '../robot.js';
-import {BentoTile, fmtTime, iconButton, label} from './widgets.js';
+import {BentoTile, SLOT_SIZE, fmtTime, iconButton, label} from './widgets.js';
 
 const css = toCss;
 
@@ -61,8 +61,60 @@ export class NowPlaying extends BentoTile {
         this.actor.set_style(`background-gradient-direction: vertical; background-gradient-start: ${css(pal.top)}; background-gradient-end: ${css(pal.bottom)};`);
     }
 
+    // Full-bleed layout (hero and the square-ish tall slot): the cover fills the
+    // whole tile, a scrim fades in from the bottom, and the text and controls
+    // sit over it.
+    _buildBleed(slot) {
+        const [w, h] = SLOT_SIZE[slot];
+        this._bleed = {slot, w, h};
+        this.actor.add_style_class_name('hv-np-bleed');
+        const hero = slot === 'hero';
+
+        const stack = new St.Widget({layout_manager: new Clutter.BinLayout(), x_expand: true, y_expand: true, clip_to_allocation: true, style_class: 'hv-np-stack'});
+        this._bleed.stack = stack;
+        const scrim = new St.Widget({style_class: 'hv-np-scrim', x_expand: true, y_expand: true, y_align: Clutter.ActorAlign.END});
+        scrim.set_height(Math.round(h * (hero ? 0.78 : 0.74)));
+        stack.add_child(scrim);
+
+        const col = new St.BoxLayout({vertical: true, x_expand: true, y_expand: true, y_align: Clutter.ActorAlign.END, style_class: 'hv-np-bleed-content'});
+        this._title = label('', hero ? 'hv-np-title-xl' : 'hv-np-title');
+        this._title.clutter_text.ellipsize = 3;
+        this._artist = label('', hero ? 'hv-np-artist-lg' : 'hv-np-artist', {x_expand: true});
+        this._artist.clutter_text.ellipsize = 3;
+        col.add_child(this._title);
+        const sub = new St.BoxLayout();
+        sub.add_child(this._artist);
+        col.add_child(sub);
+        col.add_child(this._scrubber());
+        const times = new St.BoxLayout({style_class: 'hv-times'});
+        this._elapsed = label('0:00', 'hv-small');
+        this._remain = label('', 'hv-small', {x_expand: true, x_align: Clutter.ActorAlign.END});
+        times.add_child(this._elapsed);
+        times.add_child(this._remain);
+        col.add_child(times);
+        const ctl = new St.BoxLayout({x_align: Clutter.ActorAlign.CENTER});
+        ctl.add_child(this._btn('media-seek-backward-symbolic', 'previous'));
+        this._play = this._btn('media-playback-start-symbolic', 'play_pause', true);
+        ctl.add_child(this._play);
+        ctl.add_child(this._btn('media-seek-forward-symbolic', 'next'));
+        col.add_child(ctl);
+        stack.add_child(col);
+        this.actor.add_child(stack);
+    }
+
+    _setBleedArt(path) {
+        const {w, h} = this._bleed;
+        const fitted = cropToTile(path, w, h);
+        // The image lives on the inner stack, in the same frame as the scrim and controls.
+        if (fitted)
+            this._bleed.stack.set_style(`background-image: url("file://${fitted}"); background-size: ${w}px ${h}px;`);
+    }
+
     build(slot) {
         this.actor.add_style_class_name('hv-np-colored');
+        this._bleed = null;
+        this.actor.remove_style_class_name('hv-np-bleed');
+        this.actor.set_style('');
         if (this._pal)
             this._tintTile(this._pal);
         this._len = 0;
@@ -97,39 +149,8 @@ export class NowPlaying extends BentoTile {
             return col;
         };
 
-        if (slot === 'hero') {
-            const top = new St.BoxLayout({style_class: 'hv-gap12'});
-            this._art = this._artWidget(78);
-            top.add_child(this._art);
-            top.add_child(texts('hv-np-title-xl', 'hv-np-artist-lg', true));
-            this.actor.add_child(top);
-            this.actor.add_child(this._scrubber());
-            const times = new St.BoxLayout({style_class: 'hv-times'});
-            this._elapsed = label('0:00', 'hv-small');
-            this._remain = label('', 'hv-small', {x_expand: true, x_align: Clutter.ActorAlign.END});
-            times.add_child(this._elapsed);
-            times.add_child(this._remain);
-            this.actor.add_child(times);
-            const ctl = new St.BoxLayout({x_align: Clutter.ActorAlign.CENTER, style_class: 'hv-gap12'});
-            ctl.add_child(this._btn('media-skip-backward-symbolic', 'previous'));
-            this._play = this._btn('media-playback-start-symbolic', 'play_pause', true);
-            ctl.add_child(this._play);
-            ctl.add_child(this._btn('media-skip-forward-symbolic', 'next'));
-            this.actor.add_child(ctl);
-        } else if (slot === 'tall') {
-            this._art = this._artWidget(64);
-            this._art.x_align = Clutter.ActorAlign.CENTER;
-            this.actor.add_child(this._art);
-            const t = texts('hv-np-title', 'hv-np-artist', false);
-            t.x_align = Clutter.ActorAlign.FILL;
-            this.actor.add_child(t);
-            this.actor.add_child(this._scrubber());
-            const ctl = new St.BoxLayout({x_align: Clutter.ActorAlign.CENTER});
-            ctl.add_child(this._btn('media-skip-backward-symbolic', 'previous'));
-            this._play = this._btn('media-playback-start-symbolic', 'play_pause', true);
-            ctl.add_child(this._play);
-            ctl.add_child(this._btn('media-skip-forward-symbolic', 'next'));
-            this.actor.add_child(ctl);
+        if (slot === 'hero' || slot === 'tall') {
+            this._buildBleed(slot);
         } else if (slot === 'wide') {
             this.actor.vertical = false;
             this.actor.add_style_class_name('hv-gap12');
@@ -170,6 +191,15 @@ export class NowPlaying extends BentoTile {
         if (this._play)
             this._play.child.icon_name = f.playing ? 'media-playback-pause-symbolic' : 'media-playback-start-symbolic';
 
+        if (this._bleed && f.art_url !== this._artUrl) {
+            this._artUrl = f.art_url;
+            this._tintTile(paletteFromHue(f.hue)); // until the real cover arrives
+            const url = f.art_url;
+            loadArt(url).then(path => {
+                if (path && url === this._artUrl && this._bleed)
+                    this._setBleedArt(path);
+            });
+        }
         if (this._art && f.art_url !== this._artUrl) {
             this._artUrl = f.art_url;
             const size = this._art.width;
