@@ -186,10 +186,6 @@ export function drawScreen(cr, w, h, f, t, {scene = false, radius = null, bare =
         col(cr, [0.015, 0.015, 0.02], 1);
         roundRect(cr, 0.5, 0.5, w - 1, h - 1, rad);
         cr.fill();
-        col(cr, tint, f.playing ? 0.55 : 0.16);
-        cr.setLineWidth(scene ? 1.6 : 1);
-        roundRect(cr, 0.5, 0.5, w - 1, h - 1, rad);
-        cr.stroke();
     }
 
     // --- eye colours ------------------------------------------------------
